@@ -1,0 +1,37 @@
+# Environment & Secrets
+.env
+.env.*
+!.env.example
+
+# Python
+.venv/
+venv/
+env/
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Node & Frontend
+node_modules/
+*/node_modules/
+frontend/dist/
+dist/
+.vite/
+
+# Runtime Storage & Uploads
+storage/enhanced/*
+!storage/enhanced/.gitkeep
+storage/originals/*
+!storage/originals/.gitkeep
+
+# Logs & Temp
+*.log
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+.vscode/
+.idea/

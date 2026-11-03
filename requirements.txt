@@ -1,0 +1,15 @@
+fastapi[standard]
+crewai
+crewai-tools
+pydantic
+pydantic-settings
+pymongo
+python-dotenv
+google-genai
+pillow
+pytest
+httpx
+python-multipart
+slowapi
+mongomock
+certifi
