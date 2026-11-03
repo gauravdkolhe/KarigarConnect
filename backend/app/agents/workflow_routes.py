@@ -7,6 +7,8 @@ from backend.app.schemas.workflow import (
     WorkflowInventoryRequest,
     WorkflowPricingRequest,
     WorkflowProductCreate,
+    WorkflowQuickAssistRequest,
+    WorkflowSingleApproveRequest,
     WorkflowStateResponse,
 )
 from backend.app.services.auth_service import get_current_user, require_role
@@ -20,6 +22,8 @@ from backend.app.services.product_workflow_service import (
     get_workflow_state,
     list_artisan_workflows,
     publish_workflow_product,
+    quick_assist_workflow,
+    single_approve_workflow,
 )
 
 router = APIRouter(
@@ -144,6 +148,34 @@ def publish_product(
     current_user: UserProfileResponse = Depends(require_role(["artisan", "admin"])),
 ):
     return publish_workflow_product(product_id, current_user.user_id)
+
+
+@router.post(
+    "/products/{product_id}/quick-assist",
+    response_model=WorkflowStateResponse,
+    summary="Step 2: AI Voice-to-Catalog and Pricing Assistant",
+    description="Accepts spoken/typed description from artisan and generates catalog details + pricing automatically.",
+)
+def quick_assist_product(
+    product_id: str,
+    request: WorkflowQuickAssistRequest,
+    current_user: UserProfileResponse = Depends(require_role(["artisan", "admin"])),
+):
+    return quick_assist_workflow(product_id, current_user.user_id, request)
+
+
+@router.post(
+    "/products/{product_id}/one-click-approve",
+    response_model=WorkflowStateResponse,
+    summary="Step 2 -> 3: Artisan review & publish directly to B2B market",
+    description="Saves artisan-edited catalog, price, and stock in one step and publishes immediately to B2B market.",
+)
+def one_click_approve_product(
+    product_id: str,
+    request: WorkflowSingleApproveRequest,
+    current_user: UserProfileResponse = Depends(require_role(["artisan", "admin"])),
+):
+    return single_approve_workflow(product_id, current_user.user_id, request)
 
 
 @router.get(

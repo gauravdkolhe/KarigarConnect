@@ -6,6 +6,8 @@ interface VoiceInputButtonProps {
   lang?: string;
   placeholder?: string;
   className?: string;
+  /** Render a large hero-style mic button */
+  large?: boolean;
 }
 
 export const VoiceInputButton: React.FC<VoiceInputButtonProps> = ({
@@ -13,6 +15,7 @@ export const VoiceInputButton: React.FC<VoiceInputButtonProps> = ({
   lang = 'en-IN',
   placeholder = 'Speak now...',
   className = '',
+  large = false,
 }) => {
   const [isListening, setIsListening] = useState<boolean>(false);
   const [isSupported, setIsSupported] = useState<boolean>(false);
@@ -91,6 +94,51 @@ export const VoiceInputButton: React.FC<VoiceInputButtonProps> = ({
     return null;
   }
 
+  // ── Large hero mic button ──────────────────────────────────────────────────
+  if (large) {
+    return (
+      <button
+        type="button"
+        onClick={toggleListening}
+        className={`voice-mic-btn ${className}`}
+        title={isListening ? 'Listening… tap to stop' : 'Tap to speak'}
+        style={{
+          display: 'inline-flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: '0.4rem',
+          width: '88px',
+          height: '88px',
+          borderRadius: '50%',
+          border: isListening ? '3px solid #DC2626' : '3px solid var(--color-primary)',
+          backgroundColor: isListening ? '#FEF2F2' : 'var(--color-primary-subtle, #F5F3FF)',
+          color: isListening ? '#DC2626' : 'var(--color-primary)',
+          cursor: 'pointer',
+          transition: 'all 0.2s ease',
+          boxShadow: isListening
+            ? '0 0 0 6px rgba(220,38,38,0.18), 0 0 20px rgba(220,38,38,0.25)'
+            : '0 0 0 4px rgba(124,58,237,0.1)',
+          fontSize: '0.72rem',
+          fontWeight: 600,
+        }}
+      >
+        {isListening ? (
+          <>
+            <MicOff size={28} />
+            <span>Stop</span>
+          </>
+        ) : (
+          <>
+            <Mic size={28} />
+            <span>Speak</span>
+          </>
+        )}
+      </button>
+    );
+  }
+
+  // ── Small inline button (default) ─────────────────────────────────────────
   return (
     <button
       type="button"
@@ -137,4 +185,3 @@ export const VoiceInputButton: React.FC<VoiceInputButtonProps> = ({
     </button>
   );
 };
-

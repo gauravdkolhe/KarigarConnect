@@ -12,6 +12,8 @@ from backend.app.schemas.workflow import (
     WorkflowInventoryRequest,
     WorkflowPricingRequest,
     WorkflowProductCreate,
+    WorkflowQuickAssistRequest,
+    WorkflowSingleApproveRequest,
     WorkflowStateResponse,
     WorkflowStatus,
 )
@@ -286,6 +288,133 @@ def publish_workflow_product(product_id: str, artisan_id: str) -> WorkflowStateR
     if not price:
         raise HTTPException(status_code=400, detail="Cannot publish: Pricing calculation is required.")
 
+    _update_workflow_step(product_id, "published", "product_published")
+    return get_workflow_state(product_id, artisan_id=artisan_id)
+
+
+def quick_assist_workflow(
+    product_id: str,
+    artisan_id: str,
+    req: WorkflowQuickAssistRequest,
+) -> WorkflowStateResponse:
+    """
+    Step 2: Voice-to-Catalog & AI Fair Pricing Assistant.
+    Takes spoken/typed text in local language, generates structured catalog and pricing recommendation.
+    """
+    wf = _check_product_ownership(product_id, artisan_id)
+
+    # 1. Parse or infer craft details from spoken description
+    spoken = req.spoken_text.strip()
+    product_name = wf.get("product_name") or "Artisanal Craft"
+    
+    # Generate catalog with Gemini AI / craft fallback engine
+    cat_req = CatalogRequest(
+        product_id=product_id,
+        product_name=product_name,
+        language=req.language or "en",
+        details=ProductDetails(
+            material=spoken[:50] if len(spoken) < 50 else "Natural Heritage Material",
+            craft_type="Traditional Indian Handicraft",
+            color="Natural Artisan Finish",
+            purpose=spoken,
+        ),
+    )
+    generated = generate_catalog(cat_req)
+    # Augment description with artisan's voice context if needed
+    if spoken and len(spoken) > 5 and spoken.lower() not in generated.description.lower():
+        generated.description = f"{generated.description} Artisan's note: \"{spoken}\""
+
+    save_catalog(cat_req, generated)
+
+    # 2. Automatically compute dynamic fair pricing
+    # Base estimated cost
+    base_material = req.estimated_cost or 250.0
+    base_labor = 200.0 if not req.desired_price else max(100.0, req.desired_price * 0.3)
+    base_pack = 40.0
+    base_over = 30.0
+    base_ship = 40.0
+
+    pricing_req = PricingRequest(
+        product_id=product_id,
+        product_name=generated.product_title,
+        material_cost=base_material,
+        labor_cost=base_labor,
+        packaging_cost=base_pack,
+        overhead_cost=base_over,
+        shipping_cost=base_ship,
+        target_profit_margin_percent=25.0,
+        marketplace_commission_percent=10.0,
+        rounding_rule="round_nearest_rupee",
+    )
+    pricing_res = calculate_price(pricing_req)
+    save_pricing_record(pricing_res)
+
+    # Update workflow state
+    _update_workflow_step(product_id, "catalog_pending", "quick_assist_generated")
+    return get_workflow_state(product_id, artisan_id=artisan_id)
+
+
+def single_approve_workflow(
+    product_id: str,
+    artisan_id: str,
+    req: WorkflowSingleApproveRequest,
+) -> WorkflowStateResponse:
+    """
+    Step 2 -> 3: Artisan one-click approval & edit.
+    Saves artisan's approved title, story, price, and stock, then publishes straight to B2B market.
+    """
+    _check_product_ownership(product_id, artisan_id)
+
+    # 1. Save artisan-edited catalog
+    save_req = CatalogManualSaveRequest(
+        product_id=product_id,
+        product_name=req.product_title,
+        product_title=req.product_title,
+        keywords=req.keywords if req.keywords else ["handmade", "artisan", "b2b wholesale"],
+        description=req.description,
+        language="en",
+        details=ProductDetails(
+            material=req.material,
+            craft_type=req.craft_type or "Handcrafted",
+            color="Natural",
+            purpose="Commercial Wholesale & Retail",
+        ),
+    )
+    save_manual_catalog(save_req)
+
+    # 2. Save approved pricing record
+    target_price = float(req.suggested_price)
+    est_cost = round(target_price * 0.65, 2)
+    pricing_req = PricingRequest(
+        product_id=product_id,
+        product_name=req.product_title,
+        material_cost=round(est_cost * 0.55, 2),
+        labor_cost=round(est_cost * 0.35, 2),
+        packaging_cost=round(est_cost * 0.05, 2),
+        overhead_cost=round(est_cost * 0.05, 2),
+        shipping_cost=0.0,
+        target_profit_margin_percent=25.0,
+        marketplace_commission_percent=10.0,
+        rounding_rule="round_nearest_rupee",
+    )
+    pricing_res = calculate_price(pricing_req)
+    # Set explicit approved selling price
+    pricing_res.suggested_selling_price = target_price
+    pricing_res.estimated_profit = round(target_price - est_cost - (target_price * 0.10), 2)
+    save_pricing_record(pricing_res)
+
+    # 3. Configure inventory for B2B buyer ordering
+    inv_data = ArtisanInventory(
+        product_id=product_id,
+        available_quantity=req.available_quantity,
+        production_capacity_per_month=max(50, req.available_quantity * 3),
+        minimum_order_quantity=req.minimum_order_quantity,
+        production_lead_time_days=10,
+        location=req.location,
+    )
+    save_artisan_inventory(inv_data)
+
+    # 4. Mark published to B2B
     _update_workflow_step(product_id, "published", "product_published")
     return get_workflow_state(product_id, artisan_id=artisan_id)
 

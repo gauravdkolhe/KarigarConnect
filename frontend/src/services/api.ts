@@ -298,4 +298,40 @@ export const api = {
       body: JSON.stringify({ workflow_status: workflowStatus, moderation_note: moderationNote }),
     });
   },
+
+  // 3-Step Simplified Artisan Workflow
+  async quickAssist(
+    productId: string,
+    data: {
+      spoken_text: string;
+      language: string;
+      estimated_cost?: number;
+      desired_price?: number;
+    }
+  ): Promise<WorkflowState> {
+    return request<WorkflowState>(`/api/workflow/products/${productId}/quick-assist`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  async oneClickApprove(
+    productId: string,
+    data: {
+      product_title: string;
+      description: string;
+      keywords: string[];
+      material: string;
+      craft_type?: string;
+      suggested_price: number;
+      available_quantity: number;
+      minimum_order_quantity: number;
+      location: string;
+    }
+  ): Promise<WorkflowState> {
+    return request<WorkflowState>(`/api/workflow/products/${productId}/one-click-approve`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
 };

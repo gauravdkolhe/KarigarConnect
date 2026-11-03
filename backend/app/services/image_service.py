@@ -62,6 +62,17 @@ STYLE_CONFIGS = {
         "shadow_opacity": 55,
         "warm_tint": False,
     },
+    "original": {
+        "name": "Original Artisan Photo",
+        "description": "Preserve raw authentic photo without AI background alteration.",
+        "bg_color": (255, 255, 255),
+        "brightness": 1.0,
+        "contrast": 1.0,
+        "saturation": 1.0,
+        "sharpness": 1.0,
+        "has_shadow": False,
+        "warm_tint": False,
+    },
 }
 
 
@@ -204,6 +215,44 @@ def enhance_product_image(
                     image = image.convert("RGB")
 
             original_size = image.size
+
+            if style == "original":
+                target_w, target_h = CANVAS_SIZE
+                orig_w, orig_h = image.size
+                scale = min(target_w / max(1, orig_w), target_h / max(1, orig_h))
+                new_w = max(1, int(orig_w * scale))
+                new_h = max(1, int(orig_h * scale))
+                resized = image.resize((new_w, new_h), Image.Resampling.LANCZOS)
+
+                final_canvas = Image.new("RGB", (target_w, target_h), (255, 255, 255))
+                pos_x = (target_w - new_w) // 2
+                pos_y = (target_h - new_h) // 2
+                final_canvas.paste(resized, (pos_x, pos_y))
+
+                final_filename = f"{original_path.stem}_original_{uuid4().hex[:8]}.jpg"
+                final_output_path = ENHANCED_DIR / final_filename
+                final_canvas.save(final_output_path, "JPEG", quality=95, optimize=True)
+
+                return {
+                    "image_id": original_path.stem,
+                    "original_filename": original_path.name,
+                    "enhanced_filename": final_filename,
+                    "original_dimensions": list(original_size),
+                    "enhanced_dimensions": [target_w, target_h],
+                    "style_applied": {
+                        "key": "original",
+                        "name": "Original Artisan Photo",
+                        "description": "Preserve raw authentic photo without AI background alteration.",
+                        "bg_color": [255, 255, 255],
+                    },
+                    "settings": {
+                        "brightness": 1.0,
+                        "contrast": 1.0,
+                        "saturation": 1.0,
+                        "sharpness": 1.0,
+                    },
+                    "relative_url": f"/api/images/{original_path.stem}/file",
+                }
 
             # 1. Histogram Auto-Levels for balanced dynamic range
             leveled = _auto_levels(image)

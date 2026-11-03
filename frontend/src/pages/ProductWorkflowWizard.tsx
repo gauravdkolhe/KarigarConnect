@@ -6,15 +6,15 @@ import {
   AlertTriangle,
   ArrowLeft,
   ArrowRight,
-  Calculator,
   CheckCircle2,
-  Compass,
   Loader2,
-  Palette,
-  Send,
+  Package,
   Sparkles,
+  Star,
   Upload,
+  Users,
   Wand2,
+  Zap,
 } from 'lucide-react';
 
 interface ProductWorkflowWizardProps {
@@ -23,286 +23,137 @@ interface ProductWorkflowWizardProps {
   onNavigate: (view: string, data?: any) => void;
 }
 
+// ─── Step indicator ───────────────────────────────────────────────────────────
+const STEPS = [
+  { num: 1, label: 'Photo', emoji: '📸' },
+  { num: 2, label: 'Describe', emoji: '🎙️' },
+  { num: 3, label: 'Live on Market', emoji: '✅' },
+];
+
+const IMAGE_STYLES = [
+  {
+    id: 'studio_white',
+    name: 'Studio White',
+    dot: '#FFFFFF',
+    dotBorder: '#CBD5E1',
+    desc: 'Crisp white background — standard for Amazon & Etsy',
+  },
+  {
+    id: 'warm_heritage',
+    name: 'Warm Heritage',
+    dot: '#FAF8F5',
+    dotBorder: '#D6D3D1',
+    desc: 'Warm ivory with rich saturation — best for wood, brass & clay',
+  },
+  {
+    id: 'modern_minimalist',
+    name: 'Modern Minimalist',
+    dot: '#F3F4F6',
+    dotBorder: '#9CA3AF',
+    desc: 'Neutral gray studio with drop shadow — modern gallery look',
+  },
+  {
+    id: 'original',
+    name: 'Keep Original',
+    dot: 'linear-gradient(135deg,#fde68a,#a7f3d0)',
+    dotBorder: '#6EE7B7',
+    desc: 'Preserve your raw photo exactly as taken — no edits',
+  },
+];
+
 export const ProductWorkflowWizard: React.FC<ProductWorkflowWizardProps> = ({
   productId: initialProductId,
-  initialStep,
   onNavigate,
 }) => {
-  const [currentStep, setCurrentStep] = useState<number>(initialStep || 1);
+  const [currentStep, setCurrentStep] = useState(1);
   const [workflow, setWorkflow] = useState<WorkflowState | null>(null);
   const [matches, setMatches] = useState<ProductMatch[]>([]);
-  const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
-  // Step 1: Draft fields
+  // ── Step 1: Photo ───────────────────────────────────────────────────────────
   const [productName, setProductName] = useState('');
   const [category, setCategory] = useState('Home Decor & Storage');
-  const [initialMaterial, setInitialMaterial] = useState('Assam Bamboo');
-  const [initialCraftType, setInitialCraftType] = useState('Handwoven Lattice');
-
-  // Step 2: Image upload & Styles
+  const [initialMaterial, setInitialMaterial] = useState('');
+  const [selectedStyle, setSelectedStyle] = useState('studio_white');
   const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [imageProcessing, setImageProcessing] = useState(false);
-  const [selectedStyle, setSelectedStyle] = useState<string>('studio_white');
-  const [isRestyling, setIsRestyling] = useState<boolean>(false);
 
-  // Step 3: Catalog approval & AI generation
-  const [aiGeneratingCatalog, setAiGeneratingCatalog] = useState<boolean>(false);
-  const [catalogTitle, setCatalogTitle] = useState('');
-  const [catalogDescription, setCatalogDescription] = useState('');
-  const [catalogKeywords, setCatalogKeywords] = useState('');
-  const [catalogMaterial, setCatalogMaterial] = useState('');
-  const [catalogCraftType, setCatalogCraftType] = useState('');
-  const [catalogColor, setCatalogColor] = useState('Natural Amber');
-  const [catalogPurpose, setCatalogPurpose] = useState('Storage');
+  // ── Step 2: Describe ────────────────────────────────────────────────────────
+  const [spokenText, setSpokenText] = useState('');
+  const [language, setLanguage] = useState('Hindi');
+  const [estimatedCost, setEstimatedCost] = useState<string>('');
+  const [desiredPrice, setDesiredPrice] = useState<string>('');
+  const [aiGenerating, setAiGenerating] = useState(false);
 
-  // Step 4: Pricing fields
-  const [materialCost, setMaterialCost] = useState<number>(300);
-  const [laborCost, setLaborCost] = useState<number>(200);
-  const [packagingCost, setPackagingCost] = useState<number>(50);
-  const [overheadCost, setOverheadCost] = useState<number>(50);
-  const [shippingCost, setShippingCost] = useState<number>(50);
-  const [targetMargin, setTargetMargin] = useState<number>(25);
-  const [marketplaceCommission, setMarketplaceCommission] = useState<number>(10);
-  const [pricingStrategy, setPricingStrategy] = useState<'exact' | 'round_nearest_rupee' | 'psychological_99'>('round_nearest_rupee');
+  // AI-generated / editable result
+  const [editTitle, setEditTitle] = useState('');
+  const [editDescription, setEditDescription] = useState('');
+  const [editKeywords, setEditKeywords] = useState('');
+  const [editMaterial, setEditMaterial] = useState('');
+  const [editCraftType, setEditCraftType] = useState('');
+  const [editPrice, setEditPrice] = useState<string>('');
+  const [editQty, setEditQty] = useState<string>('20');
+  const [editMoq, setEditMoq] = useState<string>('5');
+  const [editLocation, setEditLocation] = useState('India');
+  const [aiResultReady, setAiResultReady] = useState(false);
 
-  // Step 5: Inventory fields
-  const [availableQuantity, setAvailableQuantity] = useState<number>(30);
-  const [monthlyCapacity, setMonthlyCapacity] = useState<number>(100);
-  const [moq, setMoq] = useState<number>(5);
-  const [leadTimeDays, setLeadTimeDays] = useState<number>(14);
-  const [workshopLocation, setWorkshopLocation] = useState<string>('Assam, India');
-
+  // ─────────────────────────────────────────────────────────────────────────
   useEffect(() => {
-    if (initialProductId) {
-      loadProductWorkflow(initialProductId, initialStep);
-    } else if (initialStep) {
-      setCurrentStep(initialStep);
-    }
-  }, [initialProductId, initialStep]);
+    if (initialProductId) loadExistingProduct(initialProductId);
+  }, [initialProductId]);
 
-  const loadProductWorkflow = async (pid: string, targetStep?: number) => {
+  const loadExistingProduct = async (pid: string) => {
     setIsLoading(true);
-    setError(null);
     try {
       const state = await api.getProductWorkflow(pid);
       setWorkflow(state);
-
-      // Pre-fill steps
       setProductName(state.product_name);
-      if (state.catalog) {
-        setCatalogTitle(state.catalog.product_title || state.product_name);
-        setCatalogDescription(state.catalog.description || '');
-        setCatalogKeywords(state.catalog.keywords?.join(', ') || '');
-        setCatalogMaterial(state.catalog.product_details?.material || 'Assam Bamboo');
-        setCatalogCraftType(state.catalog.product_details?.craft_type || '');
-        setCatalogColor(state.catalog.product_details?.color || 'Natural Amber');
-        setCatalogPurpose(state.catalog.product_details?.purpose || 'Storage');
-      }
-      if (state.pricing) {
-        setMaterialCost(state.pricing.cost_breakdown?.material_cost || 300);
-        setLaborCost(state.pricing.cost_breakdown?.labor_cost || 200);
-      }
-      if (state.inventory) {
-        setAvailableQuantity(state.inventory.available_quantity);
-        setMonthlyCapacity(state.inventory.production_capacity_per_month);
-        setWorkshopLocation(state.inventory.location);
-      }
-
-      // Determine active step if not explicitly set
-      if (targetStep) {
-        setCurrentStep(targetStep);
-      } else if (state.workflow_status === 'published') {
-        setCurrentStep(7);
-      } else if (state.inventory) {
-        setCurrentStep(6);
-      } else if (state.pricing) {
-        setCurrentStep(5);
-      } else if (state.catalog?.description) {
-        setCurrentStep(4);
-      } else if (state.images.length > 0) {
+      if (state.workflow_status === 'published') {
         setCurrentStep(3);
-      } else {
+        loadMatches(state.product_id);
+      } else if (state.catalog) {
+        prefillFromCatalog(state);
+        setAiResultReady(true);
+        setCurrentStep(2);
+      } else if (state.images.length > 0) {
         setCurrentStep(2);
       }
-    } catch (err: any) {
-      setError(err.message || 'Failed to load product workflow.');
+    } catch (e: any) {
+      setError(e.message || 'Failed to load product.');
     } finally {
       setIsLoading(false);
     }
   };
 
-  // STEP 1: Create draft
-  const handleCreateDraft = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsLoading(true);
-    setError(null);
-    try {
-      const res = await api.createProductDraft({
-        product_name: productName,
-        category,
-        initial_material: initialMaterial,
-        initial_craft_type: initialCraftType,
-      });
-      setWorkflow(res);
-      setSuccessMsg('Product draft created! Now upload craft photos.');
-      setCurrentStep(2);
-    } catch (err: any) {
-      setError(err.message || 'Draft creation failed.');
-    } finally {
-      setIsLoading(false);
+  const prefillFromCatalog = (state: WorkflowState) => {
+    if (!state.catalog) return;
+    setEditTitle(state.catalog.product_title || state.product_name);
+    setEditDescription(state.catalog.description || '');
+    setEditKeywords(state.catalog.keywords?.join(', ') || '');
+    setEditMaterial(state.catalog.product_details?.material || '');
+    setEditCraftType(state.catalog.product_details?.craft_type || '');
+    if (state.pricing?.suggested_selling_price) {
+      setEditPrice(String(state.pricing.suggested_selling_price));
+    }
+    if (state.inventory) {
+      setEditQty(String(state.inventory.available_quantity));
+      setEditMoq(String(state.inventory.minimum_order_quantity));
+      setEditLocation(state.inventory.location);
     }
   };
 
-  // STEP 2: Image Enhancement
-  const handleUploadImage = async () => {
-    if (!workflow || !uploadFile) return;
-    setImageProcessing(true);
+  const showError = (msg: string) => {
+    setError(msg);
+    setSuccessMsg(null);
+  };
+  const showSuccess = (msg: string) => {
+    setSuccessMsg(msg);
     setError(null);
-    try {
-      await api.uploadProductImage(workflow.product_id, uploadFile, selectedStyle);
-      const updated = await api.getProductWorkflow(workflow.product_id);
-      setWorkflow(updated);
-      setSuccessMsg(`Image enhanced with white background & ${selectedStyle === 'studio_white' ? 'Studio Pure White' : selectedStyle === 'warm_heritage' ? 'Warm Heritage' : 'Modern Minimalist'} style!`);
-      setCurrentStep(3);
-    } catch (err: any) {
-      setError(err.message || 'Image enhancement failed.');
-    } finally {
-      setImageProcessing(false);
-    }
   };
 
-  // STEP 2: Re-style existing image
-  const handleRestyleImage = async (imageId: string, style: string) => {
-    if (!workflow) return;
-    setIsRestyling(true);
-    setError(null);
-    try {
-      await api.restyleProductImage(imageId, style);
-      const updated = await api.getProductWorkflow(workflow.product_id);
-      setWorkflow(updated);
-      setSuccessMsg(`Image re-rendered with new style (${style})!`);
-    } catch (err: any) {
-      setError(err.message || 'Failed to apply new style to image.');
-    } finally {
-      setIsRestyling(false);
-    }
-  };
-
-  // STEP 3: Auto-generate with Gemini AI Agent
-  const handleAutoGenerateAICatalog = async () => {
-    if (!workflow) return;
-    setAiGeneratingCatalog(true);
-    setError(null);
-    try {
-      const updated = await api.generateAICatalog(workflow.product_id);
-      setWorkflow(updated);
-      if (updated.catalog) {
-        setCatalogTitle(updated.catalog.product_title || updated.product_name);
-        setCatalogDescription(updated.catalog.description || '');
-        setCatalogKeywords(updated.catalog.keywords?.join(', ') || '');
-        if (updated.catalog.product_details?.material) {
-          setCatalogMaterial(updated.catalog.product_details.material);
-        }
-        if (updated.catalog.product_details?.craft_type) {
-          setCatalogCraftType(updated.catalog.product_details.craft_type);
-        }
-        if (updated.catalog.product_details?.color) {
-          setCatalogColor(updated.catalog.product_details.color);
-        }
-        if (updated.catalog.product_details?.purpose) {
-          setCatalogPurpose(updated.catalog.product_details.purpose);
-        }
-      }
-      setSuccessMsg('✨ AI Product Catalog Agent generated commercial title, keywords, and craft description! Review and approve below.');
-    } catch (err: any) {
-      setError(err.message || 'AI catalog generation failed.');
-    } finally {
-      setAiGeneratingCatalog(false);
-    }
-  };
-
-  // STEP 3: Catalog Approval
-  const handleCatalogApproval = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!workflow) return;
-    setIsLoading(true);
-    setError(null);
-    try {
-      const res = await api.approveCatalog(workflow.product_id, {
-        product_title: catalogTitle || workflow.product_name,
-        description: catalogDescription,
-        keywords: catalogKeywords.split(',').map((s) => s.trim()).filter(Boolean),
-        material: catalogMaterial || 'Assam Bamboo',
-        craft_type: catalogCraftType,
-        color: catalogColor,
-        purpose: catalogPurpose,
-      });
-      setWorkflow(res);
-      setSuccessMsg('Artisan catalog approved and persisted.');
-      setCurrentStep(4);
-    } catch (err: any) {
-      setError(err.message || 'Catalog save failed.');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // STEP 4: Pricing Calculation
-  const handleCalculatePricing = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!workflow) return;
-    setIsLoading(true);
-    setError(null);
-    try {
-      const res = await api.calculatePricing(workflow.product_id, {
-        material_cost: materialCost,
-        labor_cost: laborCost,
-        packaging_cost: packagingCost,
-        overhead_cost: overheadCost,
-        shipping_cost: shippingCost,
-        target_profit_margin_percent: targetMargin,
-        marketplace_commission_percent: marketplaceCommission,
-        pricing_strategy: pricingStrategy,
-      });
-      setWorkflow(res);
-      setSuccessMsg(`Price calculated: ₹${res.pricing?.suggested_selling_price}`);
-      setCurrentStep(5);
-    } catch (err: any) {
-      setError(err.message || 'Pricing calculation failed.');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // STEP 5: Inventory Configuration
-  const handleSaveInventory = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!workflow) return;
-    setIsLoading(true);
-    setError(null);
-    try {
-      const res = await api.saveInventory(workflow.product_id, {
-        available_quantity: availableQuantity,
-        production_capacity_per_month: monthlyCapacity,
-        minimum_order_quantity: moq,
-        production_lead_time_days: leadTimeDays,
-        location: workshopLocation,
-      });
-      setWorkflow(res);
-      setSuccessMsg('Artisan operational inventory saved.');
-      // Automatically load matches for Step 6
-      loadMatches(workflow.product_id);
-      setCurrentStep(6);
-    } catch (err: any) {
-      setError(err.message || 'Inventory configuration failed.');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // STEP 6: Load Market Linkage Matches
   const loadMatches = async (pid: string) => {
     try {
       const res = await api.getProductMatches(pid, 20);
@@ -312,956 +163,592 @@ export const ProductWorkflowWizard: React.FC<ProductWorkflowWizardProps> = ({
     }
   };
 
-  // STEP 7: Publish
-  const handlePublish = async () => {
-    if (!workflow) return;
+  // ── STEP 1 HANDLERS ─────────────────────────────────────────────────────────
+
+  const handleFileSelect = (file: File) => {
+    setUploadFile(file);
+    const reader = new FileReader();
+    reader.onload = (e) => setImagePreview(e.target?.result as string);
+    reader.readAsDataURL(file);
+  };
+
+  const handleStep1Submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!productName.trim()) { showError('Please enter a product name.'); return; }
+
     setIsLoading(true);
     setError(null);
     try {
-      const res = await api.publishProduct(workflow.product_id);
-      setWorkflow(res);
-      setSuccessMsg('🎉 Product published successfully to the marketplace!');
-      setCurrentStep(7);
+      // 1a. Create draft
+      const draft = await api.createProductDraft({
+        product_name: productName,
+        category,
+        initial_material: initialMaterial || 'Handcraft',
+        initial_craft_type: 'Traditional',
+      });
+      setWorkflow(draft);
+
+      // 1b. If photo selected → enhance
+      if (uploadFile) {
+        setImageProcessing(true);
+        await api.uploadProductImage(draft.product_id, uploadFile, selectedStyle);
+        const updated = await api.getProductWorkflow(draft.product_id);
+        setWorkflow(updated);
+        setImageProcessing(false);
+        showSuccess('✨ Photo processed! Now describe your craft.');
+      } else {
+        showSuccess('Draft created! Now describe your craft.');
+      }
+      setCurrentStep(2);
     } catch (err: any) {
-      setError(err.message || 'Publication failed.');
+      showError(err.message || 'Failed to create product. Try again.');
+    } finally {
+      setIsLoading(false);
+      setImageProcessing(false);
+    }
+  };
+
+  // ── STEP 2 HANDLERS ─────────────────────────────────────────────────────────
+
+  const handleQuickAssist = async () => {
+    if (!workflow) return;
+    if (!spokenText.trim()) { showError('Please describe your craft first (speak or type).'); return; }
+    setAiGenerating(true);
+    setError(null);
+    try {
+      const res = await api.quickAssist(workflow.product_id, {
+        spoken_text: spokenText,
+        language,
+        estimated_cost: estimatedCost ? Number(estimatedCost) : undefined,
+        desired_price: desiredPrice ? Number(desiredPrice) : undefined,
+      });
+      setWorkflow(res);
+      prefillFromCatalog(res);
+      setAiResultReady(true);
+      showSuccess('🤖 AI generated description & price — review and edit below!');
+    } catch (err: any) {
+      showError(err.message || 'AI generation failed. Please try again.');
+    } finally {
+      setAiGenerating(false);
+    }
+  };
+
+  const handlePublish = async () => {
+    if (!workflow) return;
+    if (!editTitle.trim()) { showError('Product title is required.'); return; }
+    if (!editPrice || Number(editPrice) <= 0) { showError('Please set a valid price.'); return; }
+
+    setIsLoading(true);
+    setError(null);
+    try {
+      const res = await api.oneClickApprove(workflow.product_id, {
+        product_title: editTitle,
+        description: editDescription,
+        keywords: editKeywords.split(',').map((k) => k.trim()).filter(Boolean),
+        material: editMaterial || initialMaterial || 'Handcraft',
+        craft_type: editCraftType,
+        suggested_price: Number(editPrice),
+        available_quantity: Number(editQty) || 20,
+        minimum_order_quantity: Number(editMoq) || 5,
+        location: editLocation || 'India',
+      });
+      setWorkflow(res);
+      await loadMatches(res.product_id);
+      showSuccess('🎉 Your product is live on the B2B marketplace!');
+      setCurrentStep(3);
+    } catch (err: any) {
+      showError(err.message || 'Publishing failed. Please try again.');
     } finally {
       setIsLoading(false);
     }
   };
 
-  const steps = [
-    { num: 1, label: 'Draft' },
-    { num: 2, label: 'Image AI' },
-    { num: 3, label: 'Catalog' },
-    { num: 4, label: 'Pricing' },
-    { num: 5, label: 'Inventory' },
-    { num: 6, label: 'Matches' },
-    { num: 7, label: 'Publish' },
-  ];
+  // ─────────────────────────────────────────────────────────────────────────
+  // RENDER
+  // ─────────────────────────────────────────────────────────────────────────
 
   return (
-    <div style={{ maxWidth: '920px', margin: '0 auto' }}>
-      {/* Navigation & Title */}
+    <div style={{ maxWidth: '860px', margin: '0 auto', paddingBottom: '3rem' }}>
+
+      {/* Back nav */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.5rem' }}>
-        <button
-          className="btn btn-outline btn-sm"
-          onClick={() => onNavigate('artisan-dashboard')}
-        >
+        <button className="btn btn-outline btn-sm" onClick={() => onNavigate('artisan-dashboard')}>
           <ArrowLeft size={16} />
           <span>Back to Studio</span>
         </button>
-
         {workflow && (
-          <span style={{ fontSize: '0.85rem', color: 'var(--color-text-muted)' }}>
-            Product ID: <strong>{workflow.product_id}</strong>
+          <span style={{ fontSize: '0.78rem', color: 'var(--color-text-muted)' }}>
+            ID: <strong>{workflow.product_id.slice(-8).toUpperCase()}</strong>
           </span>
         )}
       </div>
 
-      {/* Stepper Wizard Bar */}
-      <div className="stepper">
-        {steps.map((s) => {
+      {/* ── Stepper ── */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '2rem', gap: 0 }}>
+        {STEPS.map((s, idx) => {
           const isActive = currentStep === s.num;
           const isDone = currentStep > s.num;
           return (
-            <div
-              key={s.num}
-              className={`step-item ${isActive ? 'active' : ''} ${isDone ? 'completed' : ''}`}
-              onClick={() => {
-                // allow navigating to completed steps if workflow exists
-                if (workflow && s.num <= currentStep) setCurrentStep(s.num);
-              }}
-              style={{ cursor: workflow ? 'pointer' : 'default' }}
-            >
-              <div className="step-circle">
-                {isDone ? <CheckCircle2 size={18} /> : s.num}
+            <React.Fragment key={s.num}>
+              <div
+                style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.35rem', cursor: isDone ? 'pointer' : 'default' }}
+                onClick={() => { if (isDone) setCurrentStep(s.num); }}
+              >
+                <div style={{
+                  width: '48px', height: '48px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: isDone ? '1.1rem' : '1.3rem',
+                  fontWeight: 700,
+                  background: isDone ? 'var(--color-success)' : isActive ? 'var(--color-primary)' : 'var(--color-bg-subtle)',
+                  color: isDone || isActive ? '#fff' : 'var(--color-text-muted)',
+                  border: isActive ? '3px solid var(--color-primary)' : isDone ? '3px solid var(--color-success)' : '2px solid var(--color-border)',
+                  boxShadow: isActive ? '0 0 0 4px rgba(124,58,237,0.15)' : 'none',
+                  transition: 'all 0.25s ease',
+                }}>
+                  {isDone ? <CheckCircle2 size={22} /> : s.emoji}
+                </div>
+                <span style={{ fontSize: '0.75rem', fontWeight: isActive ? 700 : 500, color: isActive ? 'var(--color-primary)' : isDone ? 'var(--color-success)' : 'var(--color-text-muted)' }}>
+                  {s.label}
+                </span>
               </div>
-              <span className="step-title">{s.label}</span>
-            </div>
+              {idx < STEPS.length - 1 && (
+                <div style={{ flex: 1, height: '3px', background: currentStep > s.num ? 'var(--color-success)' : 'var(--color-border)', margin: '0 0.5rem', marginBottom: '1.1rem', borderRadius: '2px', transition: 'background 0.4s ease', maxWidth: '120px' }} />
+              )}
+            </React.Fragment>
           );
         })}
       </div>
 
-      {/* Alert Banners */}
+      {/* ── Alerts ── */}
       {error && (
-        <div
-          style={{
-            background: 'var(--color-danger-bg)',
-            color: 'var(--color-danger)',
-            padding: '0.75rem 1rem',
-            borderRadius: 'var(--radius-md)',
-            marginBottom: '1.5rem',
-            fontSize: '0.85rem',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '0.5rem',
-          }}
-        >
-          <AlertTriangle size={16} />
-          <span>{error}</span>
+        <div style={{ background: 'var(--color-danger-bg)', color: 'var(--color-danger)', padding: '0.75rem 1rem', borderRadius: 'var(--radius-md)', marginBottom: '1rem', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          <AlertTriangle size={16} /> <span>{error}</span>
         </div>
       )}
-
       {successMsg && (
-        <div
-          style={{
-            background: 'var(--color-success-bg)',
-            color: 'var(--color-success)',
-            padding: '0.75rem 1rem',
-            borderRadius: 'var(--radius-md)',
-            marginBottom: '1.5rem',
-            fontSize: '0.85rem',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '0.5rem',
-          }}
-        >
-          <CheckCircle2 size={16} />
-          <span>{successMsg}</span>
+        <div style={{ background: 'var(--color-success-bg)', color: 'var(--color-success)', padding: '0.75rem 1rem', borderRadius: 'var(--radius-md)', marginBottom: '1rem', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          <CheckCircle2 size={16} /> <span>{successMsg}</span>
         </div>
       )}
 
-      {/* WIZARD STEP CONTENTS */}
-      <div className="card" style={{ padding: '2rem' }}>
-        {/* STEP 1: DRAFT CREATION */}
-        {currentStep === 1 && (
-          <form onSubmit={handleCreateDraft}>
+      {/* ════════════════════════════════════════════════════════
+          STEP 1 — PHOTO
+      ════════════════════════════════════════════════════════ */}
+      {currentStep === 1 && (
+        <form onSubmit={handleStep1Submit}>
+          <div className="card" style={{ padding: '2rem' }}>
             <div style={{ marginBottom: '1.5rem' }}>
-              <h2 style={{ fontSize: '1.5rem', marginBottom: '0.25rem' }}>Step 1: Initiate Craft Draft</h2>
+              <h2 style={{ fontSize: '1.6rem', marginBottom: '0.3rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <span>📸</span> Step 1: Upload Your Craft Photo
+              </h2>
               <p style={{ color: 'var(--color-text-muted)', fontSize: '0.9rem' }}>
-                Enter the basic details of your artisanal product to initiate the multi-agent pipeline.
+                Share a photo of your creation. Our AI will make it look professional — or keep it raw if you prefer.
               </p>
             </div>
 
-            <div className="form-group">
+            {/* Product Name */}
+            <div className="form-group" style={{ marginBottom: '1rem' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
-                <label className="form-label" style={{ margin: 0 }}>Craft / Product Name *</label>
+                <label className="form-label" style={{ margin: 0 }}>Product Name *</label>
                 <VoiceInputButton
-                  onTranscript={(text) => setProductName((prev) => (prev ? `${prev} ${text}` : text))}
-                  placeholder="Listening to product name..."
+                  onTranscript={(t) => setProductName((prev) => (prev ? `${prev} ${t}` : t))}
+                  placeholder="Listening for product name..."
                 />
               </div>
               <input
-                type="text"
-                className="form-control"
-                required
+                type="text" className="form-control" required
                 placeholder="e.g. Handwoven Bamboo Storage Basket"
-                value={productName}
-                onChange={(e) => setProductName(e.target.value)}
+                value={productName} onChange={(e) => setProductName(e.target.value)}
               />
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1.5rem' }}>
               <div className="form-group">
                 <label className="form-label">Category</label>
-                <input
-                  type="text"
-                  className="form-control"
-                  placeholder="Storage & Organization"
-                  value={category}
-                  onChange={(e) => setCategory(e.target.value)}
-                />
+                <input type="text" className="form-control" placeholder="e.g. Home Decor & Storage"
+                  value={category} onChange={(e) => setCategory(e.target.value)} />
               </div>
-
               <div className="form-group">
-                <label className="form-label">Primary Raw Material</label>
-                <input
-                  type="text"
-                  className="form-control"
-                  placeholder="Assam Bamboo / Cane"
-                  value={initialMaterial}
-                  onChange={(e) => setInitialMaterial(e.target.value)}
-                />
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
+                  <label className="form-label" style={{ margin: 0 }}>Material Used</label>
+                  <VoiceInputButton
+                    onTranscript={(t) => setInitialMaterial((prev) => (prev ? `${prev} ${t}` : t))}
+                    placeholder="Listening..."
+                  />
+                </div>
+                <input type="text" className="form-control" placeholder="e.g. Bamboo, Clay, Silk"
+                  value={initialMaterial} onChange={(e) => setInitialMaterial(e.target.value)} />
               </div>
             </div>
 
-            <div className="form-group">
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
-                <label className="form-label" style={{ margin: 0 }}>Crafting Technique</label>
-                <VoiceInputButton
-                  onTranscript={(text) => setInitialCraftType((prev) => (prev ? `${prev} ${text}` : text))}
-                  placeholder="Listening..."
-                />
-              </div>
-              <input
-                type="text"
-                className="form-control"
-                placeholder="e.g. Handwoven, Lattice Carving, Natural Dye"
-                value={initialCraftType}
-                onChange={(e) => setInitialCraftType(e.target.value)}
-              />
-            </div>
-
-            <button type="submit" className="btn btn-primary" style={{ marginTop: '1rem' }} disabled={isLoading}>
-              <span>Create Draft & Proceed to Image Processing</span>
-              <ArrowRight size={16} />
-            </button>
-          </form>
-        )}
-
-        {/* STEP 2: IMAGE ENHANCEMENT */}
-        {currentStep === 2 && workflow && (
-          <div>
+            {/* Photo Upload */}
             <div style={{ marginBottom: '1.5rem' }}>
-              <h2 style={{ fontSize: '1.5rem', marginBottom: '0.25rem' }}>Step 2: AI Image Enhancement Engine</h2>
-              <p style={{ color: 'var(--color-text-muted)', fontSize: '0.9rem' }}>
-                Transforms raw workshop photos into marketplace-ready assets with pure white background,
-                auto-centered alignment, and high-dynamic contrast.
-              </p>
-            </div>
-
-            {/* Feature Highlights Banner */}
-            <div
-              style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-                gap: '0.75rem',
-                marginBottom: '1.5rem',
-                padding: '0.75rem 1rem',
-                background: '#F0FDF4',
-                border: '1px solid #BBF7D0',
-                borderRadius: 'var(--radius-md)',
-                fontSize: '0.85rem',
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#166534' }}>
-                <CheckCircle2 size={16} />
-                <span><strong>White Background</strong> Studio Isolation</span>
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#166534' }}>
-                <CheckCircle2 size={16} />
-                <span><strong>Auto-Centered</strong> 1200×1200 Framing</span>
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#166534' }}>
-                <CheckCircle2 size={16} />
-                <span><strong>Optimized</strong> Brightness & Contrast</span>
-              </div>
-            </div>
-
-            {/* Style Selector with 3 Presets */}
-            <div style={{ marginBottom: '1.5rem' }}>
-              <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
-                <Palette size={16} color="var(--color-primary)" />
-                <span>Choose Visual Style Preset (3 Options Available)</span>
+              <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.75rem' }}>
+                <Upload size={16} color="var(--color-primary)" />
+                <span>Upload Craft Photo <span style={{ fontWeight: 400, color: 'var(--color-text-muted)' }}>(optional — you can add later)</span></span>
               </label>
 
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1rem' }}>
-                {/* Style 1: Studio Pure White */}
-                <div
-                  onClick={() => setSelectedStyle('studio_white')}
-                  style={{
-                    border: selectedStyle === 'studio_white' ? '2px solid var(--color-primary)' : '1px solid var(--color-border)',
-                    borderRadius: 'var(--radius-md)',
-                    padding: '1rem',
-                    cursor: 'pointer',
-                    background: selectedStyle === 'studio_white' ? 'var(--color-primary-subtle, #F5F3FF)' : 'var(--color-bg)',
-                    transition: 'all 0.2s ease',
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
-                    <span style={{ fontWeight: 700, fontSize: '0.95rem' }}>Studio Pure White</span>
-                    <span
-                      style={{
-                        width: '20px',
-                        height: '20px',
-                        borderRadius: '50%',
-                        background: '#FFFFFF',
-                        border: '1px solid #CBD5E1',
-                        display: 'inline-block',
-                      }}
-                    />
-                  </div>
-                  <p style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)', margin: 0 }}>
-                    Crisp pure white background with neutral daylight brightness and unsharp masking. Standard for Amazon & Etsy.
-                  </p>
-                </div>
-
-                {/* Style 2: Warm Heritage & Glow */}
-                <div
-                  onClick={() => setSelectedStyle('warm_heritage')}
-                  style={{
-                    border: selectedStyle === 'warm_heritage' ? '2px solid var(--color-primary)' : '1px solid var(--color-border)',
-                    borderRadius: 'var(--radius-md)',
-                    padding: '1rem',
-                    cursor: 'pointer',
-                    background: selectedStyle === 'warm_heritage' ? 'var(--color-primary-subtle, #F5F3FF)' : 'var(--color-bg)',
-                    transition: 'all 0.2s ease',
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
-                    <span style={{ fontWeight: 700, fontSize: '0.95rem' }}>Warm Heritage & Glow</span>
-                    <span
-                      style={{
-                        width: '20px',
-                        height: '20px',
-                        borderRadius: '50%',
-                        background: '#FAF8F5',
-                        border: '1px solid #D6D3D1',
-                        display: 'inline-block',
-                      }}
-                    />
-                  </div>
-                  <p style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)', margin: 0 }}>
-                    Warm ivory backdrop with rich saturation (+22%) and amber glow to celebrate wood, brass, silk, and clay crafts.
-                  </p>
-                </div>
-
-                {/* Style 3: Modern Minimalist Gallery */}
-                <div
-                  onClick={() => setSelectedStyle('modern_minimalist')}
-                  style={{
-                    border: selectedStyle === 'modern_minimalist' ? '2px solid var(--color-primary)' : '1px solid var(--color-border)',
-                    borderRadius: 'var(--radius-md)',
-                    padding: '1rem',
-                    cursor: 'pointer',
-                    background: selectedStyle === 'modern_minimalist' ? 'var(--color-primary-subtle, #F5F3FF)' : 'var(--color-bg)',
-                    transition: 'all 0.2s ease',
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
-                    <span style={{ fontWeight: 700, fontSize: '0.95rem' }}>Modern Minimalist</span>
-                    <span
-                      style={{
-                        width: '20px',
-                        height: '20px',
-                        borderRadius: '50%',
-                        background: '#F3F4F6',
-                        border: '1px solid #9CA3AF',
-                        display: 'inline-block',
-                      }}
-                    />
-                  </div>
-                  <p style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)', margin: 0 }}>
-                    Neutral studio gray background with realistic contact drop shadow and high-definition micro-contrast.
-                  </p>
-                </div>
-              </div>
+              {/* Drag drop / click area */}
+              <label htmlFor="photo-upload" style={{
+                display: 'block', border: '2px dashed var(--color-border)', borderRadius: 'var(--radius-lg)',
+                padding: imagePreview ? '0' : '2.5rem 1.5rem', textAlign: 'center',
+                background: 'var(--color-bg-subtle)', cursor: 'pointer', overflow: 'hidden',
+                transition: 'border-color 0.2s',
+              }}>
+                {imagePreview ? (
+                  <img src={imagePreview} alt="Preview" style={{ width: '100%', maxHeight: '300px', objectFit: 'contain', display: 'block' }} />
+                ) : (
+                  <>
+                    <Upload size={32} color="var(--color-primary)" style={{ marginBottom: '0.5rem' }} />
+                    <p style={{ margin: '0 0 0.25rem', fontWeight: 600 }}>Click to choose a photo</p>
+                    <p style={{ margin: 0, fontSize: '0.8rem', color: 'var(--color-text-muted)' }}>JPG, PNG or WebP — max 10 MB</p>
+                  </>
+                )}
+              </label>
+              <input id="photo-upload" type="file" accept="image/jpeg,image/png,image/webp"
+                style={{ display: 'none' }}
+                onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFileSelect(f); }}
+              />
+              {uploadFile && (
+                <p style={{ marginTop: '0.5rem', fontSize: '0.82rem', color: 'var(--color-primary)', fontWeight: 600 }}>
+                  Selected: {uploadFile.name} ({(uploadFile.size / 1024 / 1024).toFixed(2)} MB)
+                </p>
+              )}
             </div>
 
-            {/* Display existing images if any */}
-            {workflow.images && workflow.images.length > 0 && (
-              <div style={{ marginBottom: '2rem' }}>
-                <label className="form-label">Enhanced Product Assets</label>
-                <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
-                  {workflow.images.map((img) => (
+            {/* Style selector — shown only when photo selected */}
+            {uploadFile && (
+              <div style={{ marginBottom: '1.5rem' }}>
+                <label className="form-label">Choose Photo Style</label>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '0.75rem' }}>
+                  {IMAGE_STYLES.map((s) => (
                     <div
-                      key={img.image_id}
+                      key={s.id}
+                      onClick={() => setSelectedStyle(s.id)}
                       style={{
-                        position: 'relative',
-                        border: '2px solid var(--color-success)',
-                        borderRadius: 'var(--radius-md)',
-                        overflow: 'hidden',
-                        width: '200px',
-                        background: '#fff',
-                        boxShadow: '0 2px 6px rgba(0,0,0,0.06)',
+                        border: selectedStyle === s.id ? '2px solid var(--color-primary)' : '1px solid var(--color-border)',
+                        borderRadius: 'var(--radius-md)', padding: '0.85rem',
+                        cursor: 'pointer',
+                        background: selectedStyle === s.id ? 'var(--color-primary-subtle, #F5F3FF)' : 'var(--color-bg)',
+                        transition: 'all 0.18s ease',
                       }}
                     >
-                      <div style={{ width: '100%', height: '170px', overflow: 'hidden' }}>
-                        <img
-                          src={`${API_BASE}${img.file_url}`}
-                          alt="Enhanced craft"
-                          style={{ width: '100%', height: '100%', objectFit: 'contain' }}
-                        />
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.35rem' }}>
+                        <span style={{ width: '16px', height: '16px', borderRadius: '50%', background: s.dot, border: `1px solid ${s.dotBorder}`, flexShrink: 0, display: 'inline-block' }} />
+                        <span style={{ fontWeight: 700, fontSize: '0.88rem' }}>{s.name}</span>
                       </div>
-                      <div style={{ padding: '0.5rem', background: '#F8FAFC', borderTop: '1px solid #E2E8F0', fontSize: '0.75rem' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
-                          <span style={{ fontWeight: 700, color: 'var(--color-success)' }}>✓ STUDIO ENHANCED</span>
-                          <span style={{ color: 'var(--color-text-muted)' }}>1200×1200</span>
-                        </div>
-                        <div style={{ display: 'flex', gap: '0.25rem', flexWrap: 'wrap' }}>
-                          <button
-                            type="button"
-                            className="btn btn-outline btn-xs"
-                            disabled={isRestyling}
-                            onClick={() => handleRestyleImage(img.image_id, 'studio_white')}
-                            style={{ fontSize: '0.65rem', padding: '0.1rem 0.35rem' }}
-                          >
-                            Pure White
-                          </button>
-                          <button
-                            type="button"
-                            className="btn btn-outline btn-xs"
-                            disabled={isRestyling}
-                            onClick={() => handleRestyleImage(img.image_id, 'warm_heritage')}
-                            style={{ fontSize: '0.65rem', padding: '0.1rem 0.35rem' }}
-                          >
-                            Warm Glow
-                          </button>
-                          <button
-                            type="button"
-                            className="btn btn-outline btn-xs"
-                            disabled={isRestyling}
-                            onClick={() => handleRestyleImage(img.image_id, 'modern_minimalist')}
-                            style={{ fontSize: '0.65rem', padding: '0.1rem 0.35rem' }}
-                          >
-                            Shadow
-                          </button>
-                        </div>
-                      </div>
+                      <p style={{ fontSize: '0.76rem', color: 'var(--color-text-muted)', margin: 0 }}>{s.desc}</p>
                     </div>
                   ))}
                 </div>
               </div>
             )}
 
-            {/* Upload Area */}
-            <div
-              style={{
-                border: '2px dashed var(--color-border)',
-                borderRadius: 'var(--radius-lg)',
-                padding: '2.5rem 1.5rem',
-                textAlign: 'center',
-                background: 'var(--color-bg-subtle)',
-                marginBottom: '1.5rem',
-              }}
-            >
-              <Upload size={36} color="var(--color-primary)" style={{ marginBottom: '0.75rem' }} />
-              <h4 style={{ fontSize: '1.1rem', marginBottom: '0.35rem' }}>Select Workshop Photo</h4>
-              <p style={{ color: 'var(--color-text-muted)', fontSize: '0.85rem', marginBottom: '1.25rem' }}>
-                Upload an unedited craft picture. The engine isolates background, centers the craft, and applies your chosen style.
-              </p>
-
-              <input
-                type="file"
-                accept="image/jpeg,image/png,image/webp"
-                onChange={(e) => setUploadFile(e.target.files?.[0] || null)}
-                style={{ display: 'none' }}
-                id="photo-upload"
-              />
-              <label htmlFor="photo-upload" className="btn btn-outline btn-sm">
-                Choose Image File
-              </label>
-
-              {uploadFile && (
-                <p style={{ marginTop: '0.75rem', fontSize: '0.85rem', fontWeight: 600, color: 'var(--color-primary)' }}>
-                  Selected: {uploadFile.name} ({(uploadFile.size / 1024 / 1024).toFixed(2)} MB)
-                </p>
+            <button type="submit" className="btn btn-primary" style={{ fontSize: '1rem', padding: '0.75rem 2rem' }} disabled={isLoading || imageProcessing}>
+              {(isLoading || imageProcessing) ? (
+                <><Loader2 size={18} className="spin" /><span>{imageProcessing ? 'Enhancing photo...' : 'Creating...'}</span></>
+              ) : (
+                <><span>{uploadFile ? 'Use This Photo & Continue' : 'Continue Without Photo'}</span><ArrowRight size={18} /></>
               )}
-            </div>
-
-            <div style={{ display: 'flex', gap: '1rem', justifyContent: 'space-between' }}>
-              <button
-                className="btn btn-primary"
-                onClick={handleUploadImage}
-                disabled={!uploadFile || imageProcessing || isRestyling}
-              >
-                {imageProcessing ? (
-                  <>
-                    <Loader2 size={16} className="spin" />
-                    <span>Processing & Enhancing Image...</span>
-                  </>
-                ) : (
-                  <>
-                    <Sparkles size={16} />
-                    <span>Enhance with {selectedStyle === 'studio_white' ? 'Pure White' : selectedStyle === 'warm_heritage' ? 'Warm Glow' : 'Modern Shadow'} Style</span>
-                  </>
-                )}
-              </button>
-
-              <button
-                className="btn btn-outline"
-                onClick={() => setCurrentStep(3)}
-              >
-                <span>Continue to Catalog &gt;</span>
-              </button>
-            </div>
+            </button>
           </div>
-        )}
+        </form>
+      )}
 
-        {/* STEP 3: CATALOG APPROVAL */}
-        {currentStep === 3 && workflow && (
-          <form onSubmit={handleCatalogApproval}>
-            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
+      {/* ════════════════════════════════════════════════════════
+          STEP 2 — DESCRIBE
+      ════════════════════════════════════════════════════════ */}
+      {currentStep === 2 && workflow && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+
+          {/* ── Uploaded image preview ── */}
+          {workflow.images && workflow.images.length > 0 && (
+            <div className="card" style={{ padding: '1rem', display: 'flex', gap: '1rem', alignItems: 'center', flexWrap: 'wrap' }}>
+              {workflow.images.slice(0, 3).map((img) => (
+                <div key={img.image_id} style={{ border: '2px solid var(--color-success)', borderRadius: 'var(--radius-md)', overflow: 'hidden', width: '100px', height: '100px', background: '#fff', flexShrink: 0 }}>
+                  <img src={`${API_BASE}${img.file_url}`} alt="Craft" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+                </div>
+              ))}
               <div>
-                <h2 style={{ fontSize: '1.5rem', marginBottom: '0.25rem' }}>Step 3: Product Catalog Review</h2>
-                <p style={{ color: 'var(--color-text-muted)', fontSize: '0.9rem' }}>
-                  Review, edit, and approve your catalog listing. Mandatory artisan approval prevents inaccurate AI generation.
-                </p>
+                <p style={{ margin: '0 0 0.25rem', fontWeight: 700, color: 'var(--color-success)', fontSize: '0.88rem' }}>✓ Photo Ready</p>
+                <p style={{ margin: 0, fontSize: '0.8rem', color: 'var(--color-text-muted)' }}>{workflow.images.length} image(s) processed — 1200×1200</p>
               </div>
-
-              {/* AI Auto-generate button */}
-              <button
-                type="button"
-                className="btn btn-outline"
-                onClick={handleAutoGenerateAICatalog}
-                disabled={aiGeneratingCatalog || isLoading}
-                style={{
-                  borderColor: 'var(--color-primary)',
-                  color: 'var(--color-primary)',
-                  background: 'var(--color-primary-subtle, #F5F3FF)',
-                }}
-              >
-                {aiGeneratingCatalog ? (
-                  <>
-                    <Loader2 size={16} className="spin" />
-                    <span>AI Agent Generating...</span>
-                  </>
-                ) : (
-                  <>
-                    <Wand2 size={16} />
-                    <span>✨ Auto-Draft with Gemini AI Agent</span>
-                  </>
-                )}
-              </button>
             </div>
+          )}
 
-            <div className="form-group">
-              <label className="form-label">Commercial Product Title *</label>
-              <input
-                type="text"
-                className="form-control"
-                required
-                value={catalogTitle || workflow.product_name}
-                onChange={(e) => setCatalogTitle(e.target.value)}
-              />
-            </div>
+          {/* ── Voice / Text input ── */}
+          <div className="card" style={{ padding: '2rem' }}>
+            <h2 style={{ fontSize: '1.6rem', marginBottom: '0.3rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <span>🎙️</span> Step 2: Describe Your Craft
+            </h2>
+            <p style={{ color: 'var(--color-text-muted)', fontSize: '0.9rem', marginBottom: '1.5rem' }}>
+              Speak or type in your local language. AI will write the product description and suggest a fair price.
+            </p>
 
-            <div className="form-group">
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
-                <label className="form-label" style={{ margin: 0 }}>Artisan Story & Technical Description *</label>
+            {/* Language + Voice row */}
+            <div style={{ display: 'flex', gap: '1rem', alignItems: 'flex-end', marginBottom: '1rem', flexWrap: 'wrap' }}>
+              <div className="form-group" style={{ flex: '0 0 180px', marginBottom: 0 }}>
+                <label className="form-label">Language</label>
+                <select className="form-control" value={language} onChange={(e) => setLanguage(e.target.value)}>
+                  {['Hindi', 'Marathi', 'Bengali', 'Tamil', 'Telugu', 'Kannada', 'Gujarati', 'Punjabi', 'Odia', 'Assamese', 'English'].map((l) => (
+                    <option key={l}>{l}</option>
+                  ))}
+                </select>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                <label className="form-label" style={{ margin: 0 }}>Tap microphone & speak</label>
                 <VoiceInputButton
-                  onTranscript={(text) => setCatalogDescription((prev) => (prev ? `${prev} ${text}` : text))}
-                  placeholder="Speak your story..."
+                  onTranscript={(t) => setSpokenText((prev) => (prev ? `${prev} ${t}` : t))}
+                  placeholder={`Listening in ${language}...`}
                 />
               </div>
+            </div>
+
+            {/* Large mic hero button */}
+            <div style={{ textAlign: 'center', marginBottom: '1.25rem' }}>
+              <VoiceInputButton
+                onTranscript={(t) => setSpokenText((prev) => (prev ? `${prev} ${t}` : t))}
+                placeholder={`Speak in ${language}...`}
+                large
+              />
+              <p style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)', marginTop: '0.5rem' }}>
+                Tap the mic and describe your product in {language}
+              </p>
+            </div>
+
+            <div className="form-group" style={{ marginBottom: '1rem' }}>
+              <label className="form-label">Description (spoken or typed)</label>
               <textarea
                 className="form-control"
                 rows={4}
-                required
-                placeholder="Highlight craft heritage, material sustainably sourced, and utility..."
-                value={catalogDescription}
-                onChange={(e) => setCatalogDescription(e.target.value)}
+                placeholder={`Type or speak — describe your craft in ${language} or any language. E.g. "यह बाँस की टोकरी हाथ से बुनी गई है..."`}
+                value={spokenText}
+                onChange={(e) => setSpokenText(e.target.value)}
+                style={{ resize: 'vertical' }}
               />
             </div>
 
-            <div className="form-group">
-              <label className="form-label">Search Keywords (comma-separated) *</label>
-              <input
-                type="text"
-                className="form-control"
-                required
-                placeholder="bamboo, storage, handwoven, sustainable, basket"
-                value={catalogKeywords}
-                onChange={(e) => setCatalogKeywords(e.target.value)}
-              />
-            </div>
-
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '1rem' }}>
-              <div className="form-group">
-                <label className="form-label">Material *</label>
-                <input
-                  type="text"
-                  className="form-control"
-                  required
-                  value={catalogMaterial}
-                  onChange={(e) => setCatalogMaterial(e.target.value)}
-                />
+            {/* Cost hints */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1.5rem' }}>
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label className="form-label">Material cost (₹) <span style={{ fontWeight: 400, color: 'var(--color-text-muted)' }}>optional</span></label>
+                <input type="number" className="form-control" placeholder="e.g. 200"
+                  value={estimatedCost} onChange={(e) => setEstimatedCost(e.target.value)} min="0" />
+                <small style={{ color: 'var(--color-text-muted)', fontSize: '0.75rem' }}>How much did materials cost you?</small>
               </div>
-
-              <div className="form-group">
-                <label className="form-label">Craft Technique</label>
-                <input
-                  type="text"
-                  className="form-control"
-                  value={catalogCraftType}
-                  onChange={(e) => setCatalogCraftType(e.target.value)}
-                />
-              </div>
-
-              <div className="form-group">
-                <label className="form-label">Color / Finish</label>
-                <input
-                  type="text"
-                  className="form-control"
-                  value={catalogColor}
-                  onChange={(e) => setCatalogColor(e.target.value)}
-                />
-              </div>
-
-              <div className="form-group">
-                <label className="form-label">Intended Purpose</label>
-                <input
-                  type="text"
-                  className="form-control"
-                  value={catalogPurpose}
-                  onChange={(e) => setCatalogPurpose(e.target.value)}
-                />
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label className="form-label">Your desired price (₹) <span style={{ fontWeight: 400, color: 'var(--color-text-muted)' }}>optional</span></label>
+                <input type="number" className="form-control" placeholder="e.g. 850"
+                  value={desiredPrice} onChange={(e) => setDesiredPrice(e.target.value)} min="0" />
+                <small style={{ color: 'var(--color-text-muted)', fontSize: '0.75rem' }}>What price do you want to sell at?</small>
               </div>
             </div>
 
-            <button type="submit" className="btn btn-primary" style={{ marginTop: '1rem' }} disabled={isLoading}>
-              <CheckCircle2 size={16} />
-              <span>Approve Catalog & Proceed to Pricing</span>
+            <button
+              type="button" className="btn btn-primary"
+              style={{ width: '100%', fontSize: '1rem', padding: '0.85rem' }}
+              onClick={handleQuickAssist}
+              disabled={aiGenerating || !spokenText.trim()}
+            >
+              {aiGenerating ? (
+                <><Loader2 size={18} className="spin" /><span>AI is generating description & price...</span></>
+              ) : (
+                <><Wand2 size={18} /><span>Generate AI Description & Price</span></>
+              )}
             </button>
-          </form>
-        )}
+          </div>
 
-        {/* STEP 4: DYNAMIC PRICING */}
-        {currentStep === 4 && workflow && (
-          <form onSubmit={handleCalculatePricing}>
-            <div style={{ marginBottom: '1.5rem' }}>
-              <h2 style={{ fontSize: '1.5rem', marginBottom: '0.25rem' }}>Step 4: Dynamic Pricing Agent</h2>
-              <p style={{ color: 'var(--color-text-muted)', fontSize: '0.9rem' }}>
-                Deterministic Decimal calculations ensure your selling price covers all direct costs,
-                commission, and secures your target profit margin.
-              </p>
-            </div>
-
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '1rem' }}>
-              <div className="form-group">
-                <label className="form-label">Raw Material Cost (₹)</label>
-                <input
-                  type="number"
-                  className="form-control"
-                  min="0"
-                  value={materialCost}
-                  onChange={(e) => setMaterialCost(Number(e.target.value))}
-                />
+          {/* ── AI Result — editable ── */}
+          {aiResultReady && (
+            <div className="card" style={{ padding: '2rem', border: '2px solid var(--color-primary)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1.25rem' }}>
+                <Sparkles size={22} color="var(--color-primary)" />
+                <h3 style={{ margin: 0, fontSize: '1.2rem' }}>AI-Generated Details — Review & Edit</h3>
               </div>
 
-              <div className="form-group">
-                <label className="form-label">Artisan Labor Cost (₹)</label>
-                <input
-                  type="number"
-                  className="form-control"
-                  min="0"
-                  value={laborCost}
-                  onChange={(e) => setLaborCost(Number(e.target.value))}
-                />
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
+                <div className="form-group" style={{ gridColumn: '1 / -1', marginBottom: 0 }}>
+                  <label className="form-label">Product Title *</label>
+                  <input type="text" className="form-control" value={editTitle} onChange={(e) => setEditTitle(e.target.value)} placeholder="Product title" />
+                </div>
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <label className="form-label">Material</label>
+                  <input type="text" className="form-control" value={editMaterial} onChange={(e) => setEditMaterial(e.target.value)} placeholder="e.g. Bamboo" />
+                </div>
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <label className="form-label">Craft Technique</label>
+                  <input type="text" className="form-control" value={editCraftType} onChange={(e) => setEditCraftType(e.target.value)} placeholder="e.g. Handwoven" />
+                </div>
+                <div className="form-group" style={{ gridColumn: '1 / -1', marginBottom: 0 }}>
+                  <label className="form-label">Description</label>
+                  <textarea className="form-control" rows={4} value={editDescription} onChange={(e) => setEditDescription(e.target.value)} style={{ resize: 'vertical' }} />
+                </div>
+                <div className="form-group" style={{ gridColumn: '1 / -1', marginBottom: 0 }}>
+                  <label className="form-label">Keywords (comma-separated)</label>
+                  <input type="text" className="form-control" value={editKeywords} onChange={(e) => setEditKeywords(e.target.value)} placeholder="handmade, bamboo, eco-friendly" />
+                </div>
               </div>
 
-              <div className="form-group">
-                <label className="form-label">Packaging Cost (₹)</label>
-                <input
-                  type="number"
-                  className="form-control"
-                  min="0"
-                  value={packagingCost}
-                  onChange={(e) => setPackagingCost(Number(e.target.value))}
-                />
-              </div>
-
-              <div className="form-group">
-                <label className="form-label">Allocated Overhead (₹)</label>
-                <input
-                  type="number"
-                  className="form-control"
-                  min="0"
-                  value={overheadCost}
-                  onChange={(e) => setOverheadCost(Number(e.target.value))}
-                />
-              </div>
-            </div>
-
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '1rem' }}>
-              <div className="form-group">
-                <label className="form-label">Seller Shipping Expense (₹)</label>
-                <input
-                  type="number"
-                  className="form-control"
-                  min="0"
-                  value={shippingCost}
-                  onChange={(e) => setShippingCost(Number(e.target.value))}
-                />
-              </div>
-
-              <div className="form-group">
-                <label className="form-label">Marketplace Fee (%)</label>
-                <input
-                  type="number"
-                  className="form-control"
-                  min="0"
-                  max="90"
-                  value={marketplaceCommission}
-                  onChange={(e) => setMarketplaceCommission(Number(e.target.value))}
-                />
-              </div>
-
-              <div className="form-group">
-                <label className="form-label">Target Profit Margin (%)</label>
-                <input
-                  type="number"
-                  className="form-control"
-                  min="1"
-                  max="80"
-                  value={targetMargin}
-                  onChange={(e) => setTargetMargin(Number(e.target.value))}
-                />
-              </div>
-
-              <div className="form-group">
-                <label className="form-label">Rounding Policy</label>
-                <select
-                  className="form-control"
-                  value={pricingStrategy}
-                  onChange={(e: any) => setPricingStrategy(e.target.value)}
-                >
-                  <option value="round_nearest_rupee">Nearest Rupee</option>
-                  <option value="exact">Exact (2 Decimals)</option>
-                  <option value="psychological_99">Ending in ₹99</option>
-                </select>
-              </div>
-            </div>
-
-            {/* Live Pricing Breakdown Card */}
-            {workflow.pricing && (
-              <div
-                style={{
-                  background: 'var(--color-bg-subtle)',
-                  padding: '1.25rem',
-                  borderRadius: 'var(--radius-md)',
-                  margin: '1rem 0',
-                  border: '1px solid var(--color-border)',
-                }}
-              >
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <div>
-                    <span style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)' }}>Recommended Selling Price</span>
-                    <h3 style={{ fontSize: '1.75rem', color: 'var(--color-primary)' }}>
-                      ₹{workflow.pricing.suggested_selling_price.toLocaleString('en-IN')}
-                    </h3>
+              {/* Price & Inventory row */}
+              <div style={{ background: 'var(--color-bg-subtle)', borderRadius: 'var(--radius-md)', padding: '1rem', marginBottom: '1.25rem' }}>
+                <p style={{ margin: '0 0 0.75rem', fontWeight: 700, fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                  <Zap size={16} color="var(--color-primary)" /> Pricing & Inventory
+                </p>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '0.75rem' }}>
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <label className="form-label">Selling Price (₹) *</label>
+                    <input type="number" className="form-control" value={editPrice} onChange={(e) => setEditPrice(e.target.value)} placeholder="₹" min="1" style={{ fontWeight: 700, fontSize: '1.1rem' }} />
                   </div>
-                  <div style={{ textAlign: 'right' }}>
-                    <span style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)' }}>Estimated Net Profit</span>
-                    <h4 style={{ fontSize: '1.25rem', color: 'var(--color-success)' }}>
-                      ₹{workflow.pricing.estimated_profit.toLocaleString('en-IN')} ({workflow.pricing.estimated_profit_margin_percent}%)
-                    </h4>
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <label className="form-label">Available Qty</label>
+                    <input type="number" className="form-control" value={editQty} onChange={(e) => setEditQty(e.target.value)} min="1" />
+                  </div>
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <label className="form-label">Min Order (MOQ)</label>
+                    <input type="number" className="form-control" value={editMoq} onChange={(e) => setEditMoq(e.target.value)} min="1" />
+                  </div>
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <label className="form-label">Location</label>
+                    <input type="text" className="form-control" value={editLocation} onChange={(e) => setEditLocation(e.target.value)} placeholder="State, India" />
                   </div>
                 </div>
               </div>
-            )}
 
-            <button type="submit" className="btn btn-primary" style={{ marginTop: '0.5rem' }} disabled={isLoading}>
-              <Calculator size={16} />
-              <span>Calculate Price & Proceed to Inventory</span>
-            </button>
-          </form>
-        )}
-
-        {/* STEP 5: INVENTORY & CAPACITY */}
-        {currentStep === 5 && workflow && (
-          <form onSubmit={handleSaveInventory}>
-            <div style={{ marginBottom: '1.5rem' }}>
-              <h2 style={{ fontSize: '1.5rem', marginBottom: '0.25rem' }}>Step 5: Inventory & Operational Capacity</h2>
-              <p style={{ color: 'var(--color-text-muted)', fontSize: '0.9rem' }}>
-                Set your ready stock, monthly handcrafting capacity, and production turnaround times.
-              </p>
+              <button
+                type="button" className="btn btn-success"
+                style={{ width: '100%', fontSize: '1.05rem', padding: '0.9rem', background: 'var(--color-success)', border: 'none' }}
+                onClick={handlePublish}
+                disabled={isLoading}
+              >
+                {isLoading ? (
+                  <><Loader2 size={18} className="spin" /><span>Publishing to B2B Market...</span></>
+                ) : (
+                  <><CheckCircle2 size={20} /><span>Looks Good — Publish to Buyers ✅</span></>
+                )}
+              </button>
             </div>
+          )}
+        </div>
+      )}
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem' }}>
-              <div className="form-group">
-                <label className="form-label">Ready Stock (Units Available)</label>
-                <input
-                  type="number"
-                  className="form-control"
-                  min="0"
-                  value={availableQuantity}
-                  onChange={(e) => setAvailableQuantity(Number(e.target.value))}
-                />
+      {/* ════════════════════════════════════════════════════════
+          STEP 3 — LIVE ON MARKET
+      ════════════════════════════════════════════════════════ */}
+      {currentStep === 3 && workflow && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+
+          {/* Success banner */}
+          <div style={{
+            background: 'linear-gradient(135deg, #10B981 0%, #059669 100%)',
+            borderRadius: 'var(--radius-lg)', padding: '2.5rem 2rem', textAlign: 'center', color: '#fff',
+          }}>
+            <div style={{ fontSize: '3rem', marginBottom: '0.5rem' }}>🎉</div>
+            <h2 style={{ fontSize: '1.8rem', margin: '0 0 0.5rem', color: '#fff' }}>Your product is LIVE!</h2>
+            <p style={{ margin: '0 0 1rem', opacity: 0.9, fontSize: '1rem' }}>
+              <strong>{workflow.product_name}</strong> is now visible to verified B2B buyers on KarigarConnect.
+            </p>
+            <div style={{ display: 'inline-flex', gap: '1.5rem', background: 'rgba(255,255,255,0.15)', borderRadius: 'var(--radius-md)', padding: '0.75rem 1.5rem', flexWrap: 'wrap', justifyContent: 'center' }}>
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ fontSize: '1.5rem', fontWeight: 800 }}>{matches.length}</div>
+                <div style={{ fontSize: '0.78rem', opacity: 0.85 }}>Buyer Matches</div>
               </div>
-
-              <div className="form-group">
-                <label className="form-label">Monthly Production Capacity (Units)</label>
-                <input
-                  type="number"
-                  className="form-control"
-                  min="1"
-                  value={monthlyCapacity}
-                  onChange={(e) => setMonthlyCapacity(Number(e.target.value))}
-                />
-              </div>
-
-              <div className="form-group">
-                <label className="form-label">Minimum Order Quantity (MOQ)</label>
-                <input
-                  type="number"
-                  className="form-control"
-                  min="1"
-                  value={moq}
-                  onChange={(e) => setMoq(Number(e.target.value))}
-                />
-              </div>
-
-              <div className="form-group">
-                <label className="form-label">Production Lead Time (Days)</label>
-                <input
-                  type="number"
-                  className="form-control"
-                  min="1"
-                  value={leadTimeDays}
-                  onChange={(e) => setLeadTimeDays(Number(e.target.value))}
-                />
+              {workflow.pricing?.suggested_selling_price && (
+                <div style={{ textAlign: 'center' }}>
+                  <div style={{ fontSize: '1.5rem', fontWeight: 800 }}>₹{workflow.pricing.suggested_selling_price}</div>
+                  <div style={{ fontSize: '0.78rem', opacity: 0.85 }}>Listed Price</div>
+                </div>
+              )}
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ fontSize: '1.5rem', fontWeight: 800 }}>B2B</div>
+                <div style={{ fontSize: '0.78rem', opacity: 0.85 }}>Market Linked</div>
               </div>
             </div>
+          </div>
 
-            <div className="form-group">
-              <label className="form-label">Workshop Location (City, State, Country)</label>
-              <input
-                type="text"
-                className="form-control"
-                value={workshopLocation}
-                onChange={(e) => setWorkshopLocation(e.target.value)}
+          {/* Product card */}
+          <div className="card" style={{ padding: '1.5rem', display: 'flex', gap: '1.5rem', flexWrap: 'wrap', alignItems: 'flex-start' }}>
+            {workflow.images && workflow.images.length > 0 && (
+              <img
+                src={`${API_BASE}${workflow.images[0].file_url}`}
+                alt={workflow.product_name}
+                style={{ width: '120px', height: '120px', objectFit: 'contain', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', background: '#fff', flexShrink: 0 }}
               />
-            </div>
-
-            <button type="submit" className="btn btn-primary" style={{ marginTop: '1rem' }} disabled={isLoading}>
-              <CheckCircle2 size={16} />
-              <span>Save Inventory & Discover Buyer Matches</span>
-            </button>
-          </form>
-        )}
-
-        {/* STEP 6: MARKET LINKAGE MATCHES */}
-        {currentStep === 6 && workflow && (
-          <div>
-            <div style={{ marginBottom: '1.5rem' }}>
-              <h2 style={{ fontSize: '1.5rem', marginBottom: '0.25rem' }}>Step 6: Genuine Market Linkages</h2>
-              <p style={{ color: 'var(--color-text-muted)', fontSize: '0.9rem' }}>
-                The Market Linkage Agent evaluated active buyer requirements in MongoDB against your craft specifications.
-              </p>
-            </div>
-
-            {matches.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: '2.5rem 1rem', background: 'var(--color-bg-subtle)', borderRadius: 'var(--radius-md)' }}>
-                <Compass size={32} color="var(--color-primary)" style={{ marginBottom: '0.5rem' }} />
-                <h4>No Immediate High-Affinity Matches</h4>
-                <p style={{ color: 'var(--color-text-muted)', fontSize: '0.85rem' }}>
-                  No active buyers currently seeking this exact spec. You can still proceed to publish your listing.
+            )}
+            <div style={{ flex: 1 }}>
+              <h3 style={{ margin: '0 0 0.25rem', fontSize: '1.15rem' }}>{workflow.catalog?.product_title || workflow.product_name}</h3>
+              {workflow.catalog?.product_details?.material && (
+                <p style={{ margin: '0 0 0.5rem', fontSize: '0.85rem', color: 'var(--color-text-muted)' }}>
+                  Material: <strong>{workflow.catalog.product_details.material}</strong>
+                  {workflow.catalog.product_details.craft_type && ` · ${workflow.catalog.product_details.craft_type}`}
                 </p>
-              </div>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginBottom: '2rem' }}>
-                {matches.map((m) => (
-                  <div
-                    key={m.match_id}
-                    style={{
-                      border: '1px solid var(--color-border)',
-                      borderRadius: 'var(--radius-md)',
-                      padding: '1.25rem',
-                      background: 'white',
-                      boxShadow: 'var(--shadow-sm)',
-                    }}
-                  >
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.5rem' }}>
-                      <div>
-                        <h4 style={{ fontSize: '1.1rem' }}>{m.buyer_name}</h4>
-                        <span style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)' }}>
-                          {m.buyer_type} • Location: {m.buyer_summary.delivery_location}
-                        </span>
-                      </div>
+              )}
+              {workflow.catalog?.description && (
+                <p style={{ margin: '0 0 0.75rem', fontSize: '0.85rem', color: 'var(--color-text)', lineHeight: 1.6, WebkitLineClamp: 3, overflow: 'hidden', display: '-webkit-box', WebkitBoxOrient: 'vertical' }}>
+                  {workflow.catalog.description}
+                </p>
+              )}
+              {workflow.catalog?.keywords && workflow.catalog.keywords.length > 0 && (
+                <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap' }}>
+                  {workflow.catalog.keywords.slice(0, 5).map((kw) => (
+                    <span key={kw} style={{ background: 'var(--color-bg-subtle)', border: '1px solid var(--color-border)', borderRadius: '999px', padding: '0.2rem 0.6rem', fontSize: '0.72rem', color: 'var(--color-text-muted)' }}>
+                      {kw}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
 
-                      <div style={{ textAlign: 'right' }}>
-                        <span
-                          style={{
-                            fontSize: '1.25rem',
-                            fontWeight: 800,
-                            fontFamily: 'var(--font-heading)',
-                            color: m.match_score >= 80 ? 'var(--color-success)' : 'var(--color-primary)',
-                          }}
-                        >
-                          {m.match_score}%
-                        </span>
-                        <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--color-text-muted)' }}>
-                          {m.match_category} Match
-                        </div>
-                      </div>
+          {/* Buyer matches */}
+          {matches.length > 0 ? (
+            <div className="card" style={{ padding: '1.5rem' }}>
+              <h3 style={{ margin: '0 0 1rem', fontSize: '1.1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <Users size={18} color="var(--color-primary)" /> Top B2B Buyer Matches
+              </h3>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                {matches.slice(0, 5).map((m) => (
+                  <div key={m.match_id} style={{ display: 'flex', alignItems: 'center', gap: '1rem', padding: '0.85rem 1rem', background: 'var(--color-bg-subtle)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)' }}>
+                    <div style={{ flexShrink: 0, width: '44px', height: '44px', borderRadius: '50%', background: 'var(--color-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 700, fontSize: '1.1rem' }}>
+                      {m.buyer_name?.charAt(0)?.toUpperCase() || 'B'}
                     </div>
-
-                    {/* Compatibility Grid */}
-                    <div className="compat-grid">
-                      <div className={`compat-item ${m.compatibility.category}`}>
-                        <span>Category</span>
-                        <span>{m.compatibility.category ? '✓' : '✗'}</span>
-                      </div>
-                      <div className={`compat-item ${m.compatibility.budget}`}>
-                        <span>Budget</span>
-                        <span>{m.compatibility.budget ? '✓' : '✗'}</span>
-                      </div>
-                      <div className={`compat-item ${m.compatibility.quantity}`}>
-                        <span>Quantity</span>
-                        <span>{m.compatibility.quantity ? '✓' : '✗'}</span>
-                      </div>
-                      <div className={`compat-item ${m.compatibility.delivery}`}>
-                        <span>Turnaround</span>
-                        <span>{m.compatibility.delivery ? '✓' : '✗'}</span>
-                      </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <p style={{ margin: '0 0 0.1rem', fontWeight: 700, fontSize: '0.9rem' }}>{m.buyer_name || 'Anonymous Buyer'}</p>
+                    {m.requirement_id && <p style={{ margin: 0, fontSize: '0.78rem', color: 'var(--color-text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>Req: {m.requirement_id.slice(-8).toUpperCase()}</p>}
                     </div>
-
-                    <p style={{ fontSize: '0.85rem', color: 'var(--color-text-muted)', margin: '0.5rem 0' }}>
-                      <strong>Buyer Needs:</strong> {m.buyer_summary.required_quantity} units | Budget: {m.buyer_summary.budget_range}
-                    </p>
-
-                    <div style={{ fontSize: '0.85rem', color: 'var(--color-text-main)', background: 'var(--color-primary-light)', padding: '0.6rem 0.8rem', borderRadius: 'var(--radius-sm)' }}>
-                      <strong>Recommendation:</strong> {m.recommendation}
+                    <div style={{ flexShrink: 0, textAlign: 'right' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', color: '#F59E0B', justifyContent: 'flex-end' }}>
+                        <Star size={14} fill="#F59E0B" />
+                        <span style={{ fontWeight: 700, fontSize: '0.95rem' }}>{m.match_score}%</span>
+                      </div>
+                      <span style={{ fontSize: '0.72rem', color: 'var(--color-text-muted)' }}>match</span>
                     </div>
                   </div>
                 ))}
               </div>
-            )}
-
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '1.5rem' }}>
-              <button className="btn btn-outline" onClick={() => setCurrentStep(5)}>
-                &lt; Back to Inventory
-              </button>
-              <button className="btn btn-primary" onClick={() => setCurrentStep(7)}>
-                <span>Proceed to Final Publication</span>
-                <ArrowRight size={16} />
-              </button>
             </div>
-          </div>
-        )}
-
-        {/* STEP 7: PUBLISH & REVIEW */}
-        {currentStep === 7 && workflow && (
-          <div style={{ textAlign: 'center', padding: '1rem 0' }}>
-            <div
-              style={{
-                width: '64px',
-                height: '64px',
-                borderRadius: '50%',
-                background: workflow.workflow_status === 'published' ? 'var(--color-success-bg)' : 'var(--color-primary-light)',
-                color: workflow.workflow_status === 'published' ? 'var(--color-success)' : 'var(--color-primary)',
-                display: 'inline-flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                marginBottom: '1rem',
-              }}
-            >
-              {workflow.workflow_status === 'published' ? <CheckCircle2 size={36} /> : <Sparkles size={36} />}
+          ) : (
+            <div className="card" style={{ padding: '1.5rem', textAlign: 'center' }}>
+              <Users size={32} color="var(--color-text-muted)" style={{ marginBottom: '0.5rem' }} />
+              <p style={{ margin: '0 0 0.25rem', fontWeight: 700 }}>Scanning B2B Buyer Network...</p>
+              <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--color-text-muted)' }}>Buyers matching your craft will appear here as they post requirements.</p>
             </div>
+          )}
 
-            <h2 style={{ fontSize: '1.75rem', marginBottom: '0.5rem' }}>
-              {workflow.workflow_status === 'published' ? 'Product Successfully Published!' : 'Ready to Publish Your Craft?'}
-            </h2>
-            <p style={{ color: 'var(--color-text-muted)', maxWidth: '540px', margin: '0 auto 2rem', fontSize: '0.9rem' }}>
-              {workflow.workflow_status === 'published'
-                ? 'Your product listing is live on the marketplace. Verified buyers and wholesalers can discover and send sourcing inquiries.'
-                : 'All four AI agents have successfully processed your listing: enhanced photography, storytelling catalog, profit-guaranteed price, and verified market linkages.'}
-            </p>
-
-            {workflow.workflow_status !== 'published' ? (
-              <button
-                className="btn btn-primary"
-                onClick={handlePublish}
-                disabled={isLoading}
-                style={{ padding: '0.85rem 2rem', fontSize: '1.05rem' }}
-              >
-                <span>Publish Craft to Marketplace</span>
-                <Send size={18} />
-              </button>
-            ) : (
-              <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center' }}>
-                <button
-                  className="btn btn-primary"
-                  onClick={() => onNavigate('artisan-dashboard')}
-                >
-                  Return to Studio Dashboard
-                </button>
-              </div>
-            )}
+          {/* Action buttons */}
+          <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
+            <button className="btn btn-primary" style={{ flex: 1 }} onClick={() => onNavigate('artisan-dashboard')}>
+              <Package size={16} /> <span>View My Studio</span>
+            </button>
+            <button className="btn btn-outline" style={{ flex: 1 }} onClick={() => {
+              setCurrentStep(1); setWorkflow(null); setProductName(''); setInitialMaterial('');
+              setUploadFile(null); setImagePreview(null); setSpokenText(''); setAiResultReady(false);
+              setEditTitle(''); setEditDescription(''); setEditKeywords(''); setEditPrice('');
+              setError(null); setSuccessMsg(null); setMatches([]);
+            }}>
+              <Sparkles size={16} /> <span>List Another Product</span>
+            </button>
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 };

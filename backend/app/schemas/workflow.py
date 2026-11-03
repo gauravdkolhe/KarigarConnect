@@ -78,3 +78,28 @@ class WorkflowStateResponse(BaseModel):
     match_count: int = 0
     created_at: str
     updated_at: str
+
+
+class WorkflowQuickAssistRequest(BaseModel):
+    """Voice/spoken input from artisan to trigger AI auto-generation of catalog and fair pricing."""
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    spoken_text: str = Field(..., min_length=2, max_length=2000, description="Spoken or typed description by artisan in local language")
+    language: str = Field(default="en", description="Language of voice input (e.g. en, hi, mr, bn, etc.)")
+    estimated_cost: float | None = Field(default=None, ge=0, description="Optional raw cost estimate mentioned by artisan")
+    desired_price: float | None = Field(default=None, ge=0, description="Optional desired price mentioned by artisan")
+
+
+class WorkflowSingleApproveRequest(BaseModel):
+    """One-click approval/edit of catalog, pricing, and inventory by artisan to publish directly to B2B."""
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    product_title: str = Field(..., min_length=1, max_length=200)
+    description: str = Field(..., min_length=10, max_length=2500)
+    keywords: list[str] = Field(default_factory=list)
+    material: str = Field(default="Handcrafted Natural Material", min_length=1, max_length=100)
+    craft_type: str | None = None
+    suggested_price: float = Field(..., gt=0)
+    available_quantity: int = Field(default=20, ge=1)
+    minimum_order_quantity: int = Field(default=2, ge=1)
+    location: str = Field(default="India", max_length=200)
