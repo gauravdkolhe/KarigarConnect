@@ -51,7 +51,7 @@ const MainApp: React.FC = () => {
       return <ProductWorkflowWizard onNavigate={handleNavigate} />;
     }
     if (currentView === 'workflow-wizard') {
-      return <ProductWorkflowWizard productId={viewData?.productId} initialStep={viewData?.step} onNavigate={handleNavigate} />;
+      return <ProductWorkflowWizard productId={viewData?.productId} onNavigate={handleNavigate} />;
     }
     if (currentView === 'buyer-dashboard') {
       return <BuyerDashboard onNavigate={handleNavigate} />;

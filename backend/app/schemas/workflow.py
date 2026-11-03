@@ -95,7 +95,7 @@ class WorkflowSingleApproveRequest(BaseModel):
     model_config = ConfigDict(str_strip_whitespace=True)
 
     product_title: str = Field(..., min_length=1, max_length=200)
-    description: str = Field(..., min_length=10, max_length=2500)
+    description: str = Field(default="Handcrafted artisan product.", min_length=1, max_length=2500)
     keywords: list[str] = Field(default_factory=list)
     material: str = Field(default="Handcrafted Natural Material", min_length=1, max_length=100)
     craft_type: str | None = None

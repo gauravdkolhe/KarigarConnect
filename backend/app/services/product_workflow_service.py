@@ -366,12 +366,18 @@ def single_approve_workflow(
     _check_product_ownership(product_id, artisan_id)
 
     # 1. Save artisan-edited catalog
+    safe_description = req.description.strip() if req.description and len(req.description.strip()) >= 5 else f"Handcrafted {req.product_title} — authentic artisan product."
+    safe_keywords = req.keywords if req.keywords else ["handmade", "artisan", "b2b wholesale"]
+    # Ensure minimum 3 keywords for catalog schema
+    while len(safe_keywords) < 3:
+        safe_keywords.append("handcrafted")
+
     save_req = CatalogManualSaveRequest(
         product_id=product_id,
         product_name=req.product_title,
         product_title=req.product_title,
-        keywords=req.keywords if req.keywords else ["handmade", "artisan", "b2b wholesale"],
-        description=req.description,
+        keywords=safe_keywords,
+        description=safe_description,
         language="en",
         details=ProductDetails(
             material=req.material,
