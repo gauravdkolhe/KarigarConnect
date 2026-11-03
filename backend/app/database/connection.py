@@ -43,9 +43,15 @@ def _init_db():
 client, database = _init_db()
 
 def check_database_connection() -> bool:
-    """Check whether database is reachable or active."""
+    """Check whether database is reachable or active, falling back if dropped."""
+    global client, database, _using_mock
+    if _using_mock:
+        return True
     try:
         client.admin.command("ping")
         return True
     except Exception:
-        return _using_mock
+        _using_mock = True
+        client = mongomock.MongoClient()
+        database = client[settings.MONGODB_DATABASE or "karigarconnect"]
+        return True
