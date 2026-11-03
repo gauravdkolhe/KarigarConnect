@@ -23,6 +23,21 @@ interface ProductWorkflowWizardProps {
   onNavigate: (view: string, data?: any) => void;
 }
 
+// ─── Language code map ────────────────────────────────────────────────────────
+const LANG_CODE: Record<string, string> = {
+  Hindi: 'hi-IN',
+  Marathi: 'mr-IN',
+  Bengali: 'bn-IN',
+  Tamil: 'ta-IN',
+  Telugu: 'te-IN',
+  Kannada: 'kn-IN',
+  Gujarati: 'gu-IN',
+  Punjabi: 'pa-IN',
+  Odia: 'or-IN',
+  Assamese: 'as-IN',
+  English: 'en-IN',
+};
+
 // ─── Step indicator ───────────────────────────────────────────────────────────
 const STEPS = [
   { num: 1, label: 'Photo', emoji: '📸' },
@@ -497,6 +512,7 @@ export const ProductWorkflowWizard: React.FC<ProductWorkflowWizardProps> = ({
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
                 <label className="form-label" style={{ margin: 0 }}>Tap microphone & speak</label>
                 <VoiceInputButton
+                  lang={LANG_CODE[language] || 'en-IN'}
                   onTranscript={(t) => setSpokenText((prev) => (prev ? `${prev} ${t}` : t))}
                   placeholder={`Listening in ${language}...`}
                 />
@@ -506,6 +522,7 @@ export const ProductWorkflowWizard: React.FC<ProductWorkflowWizardProps> = ({
             {/* Large mic hero button */}
             <div style={{ textAlign: 'center', marginBottom: '1.25rem' }}>
               <VoiceInputButton
+                lang={LANG_CODE[language] || 'en-IN'}
                 onTranscript={(t) => setSpokenText((prev) => (prev ? `${prev} ${t}` : t))}
                 placeholder={`Speak in ${language}...`}
                 large

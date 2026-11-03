@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Mic, MicOff } from 'lucide-react';
 
 interface VoiceInputButtonProps {
@@ -21,78 +21,91 @@ export const VoiceInputButton: React.FC<VoiceInputButtonProps> = ({
   const [isSupported, setIsSupported] = useState<boolean>(false);
   const recognitionRef = useRef<any>(null);
 
+  // Store the callback in a ref so the effect never needs to re-run when
+  // the parent re-renders (inline arrow functions always have a new reference).
+  const onTranscriptRef = useRef(onTranscript);
+  useEffect(() => {
+    onTranscriptRef.current = onTranscript;
+  });
+
+  // Also store lang in a ref so we can update it without recreating recognition.
+  const langRef = useRef(lang);
+  useEffect(() => {
+    langRef.current = lang;
+    // If recognition already exists, update its lang live.
+    if (recognitionRef.current) {
+      recognitionRef.current.lang = lang;
+    }
+  }, [lang]);
+
+  // Create the SpeechRecognition object exactly ONCE on mount.
   useEffect(() => {
     const SpeechRecognition =
       (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
 
-    if (SpeechRecognition) {
-      setIsSupported(true);
-      const recog = new SpeechRecognition();
-      recog.continuous = false;
-      recog.interimResults = false;
-      recog.lang = lang;
+    if (!SpeechRecognition) return;
 
-      recog.onresult = (event: any) => {
-        const transcript = event.results?.[0]?.[0]?.transcript || '';
-        if (transcript) {
-          onTranscript(transcript);
-        }
-        setIsListening(false);
-      };
+    setIsSupported(true);
 
-      recog.onerror = (err: any) => {
-        console.warn('Speech recognition error:', err);
-        setIsListening(false);
-      };
+    const recog = new SpeechRecognition();
+    recog.continuous = false;
+    recog.interimResults = false;
+    recog.lang = langRef.current;
 
-      recog.onend = () => {
-        setIsListening(false);
-      };
+    recog.onresult = (event: any) => {
+      const transcript: string = event.results?.[0]?.[0]?.transcript || '';
+      if (transcript) {
+        onTranscriptRef.current(transcript);
+      }
+      setIsListening(false);
+    };
 
-      recognitionRef.current = recog;
-    }
+    recog.onerror = (err: any) => {
+      console.warn('Speech recognition error:', err.error, err.message);
+      setIsListening(false);
+    };
+
+    recog.onend = () => {
+      setIsListening(false);
+    };
+
+    recognitionRef.current = recog;
 
     return () => {
-      if (recognitionRef.current) {
-        try {
-          recognitionRef.current.abort();
-        } catch {
-          // quiet abort
-        }
-      }
+      try { recog.abort(); } catch { /* quiet */ }
     };
-  }, [lang, onTranscript]);
+  }, []); // ← empty deps: runs only once
 
-  const toggleListening = (e: React.MouseEvent) => {
+  const toggleListening = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
 
-    if (!isSupported) {
-      alert('Voice-to-text is supported on Google Chrome, Samsung Internet, Microsoft Edge, and Safari. Please use a supported browser or grant microphone permissions.');
+    if (!recognitionRef.current) {
+      alert(
+        'Voice-to-text is not supported in this browser.\n' +
+        'Please use Google Chrome, Samsung Internet, Microsoft Edge, or Safari.'
+      );
       return;
     }
 
+    // Update lang right before starting, in case language changed.
+    recognitionRef.current.lang = langRef.current;
+
     if (isListening) {
-      try {
-        recognitionRef.current?.stop();
-      } catch {
-        // quiet
-      }
+      try { recognitionRef.current.stop(); } catch { /* quiet */ }
       setIsListening(false);
     } else {
       try {
-        recognitionRef.current?.start();
+        recognitionRef.current.start();
         setIsListening(true);
       } catch (err) {
         console.warn('Failed to start speech recognition:', err);
         setIsListening(false);
       }
     }
-  };
+  }, [isListening]);
 
-  if (!isSupported) {
-    return null;
-  }
+  if (!isSupported) return null;
 
   // ── Large hero mic button ──────────────────────────────────────────────────
   if (large) {
@@ -144,7 +157,7 @@ export const VoiceInputButton: React.FC<VoiceInputButtonProps> = ({
       type="button"
       onClick={toggleListening}
       className={`voice-mic-btn ${className}`}
-      title={isListening ? 'Listening... click to stop' : 'Click to speak (Voice-to-Text)'}
+      title={isListening ? 'Listening... click to stop' : 'Click to speak'}
       style={{
         display: 'inline-flex',
         alignItems: 'center',
@@ -159,20 +172,12 @@ export const VoiceInputButton: React.FC<VoiceInputButtonProps> = ({
         fontWeight: 500,
         cursor: 'pointer',
         transition: 'all 0.2s ease',
-        boxShadow: isListening ? '0 0 10px rgba(220, 38, 38, 0.3)' : 'var(--shadow-sm)',
+        boxShadow: isListening ? '0 0 10px rgba(220,38,38,0.3)' : 'var(--shadow-sm)',
       }}
     >
       {isListening ? (
         <>
-          <span
-            style={{
-              width: 8,
-              height: 8,
-              borderRadius: '50%',
-              backgroundColor: '#DC2626',
-              animation: 'pulse 1s infinite',
-            }}
-          />
+          <span style={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: '#DC2626', animation: 'pulse 1s infinite' }} />
           <MicOff size={14} />
           <span>{placeholder}</span>
         </>
