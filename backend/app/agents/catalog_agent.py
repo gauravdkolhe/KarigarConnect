@@ -70,6 +70,59 @@ def _generate_rule_based_catalog(request: CatalogRequest) -> CatalogResponse:
     )
 
 
+def generate_catalog_with_prompt(request: CatalogRequest, custom_prompt: str) -> CatalogResponse:
+    """
+    Generate catalog using a fully custom prompt (supplied by the Orchestrator Agent).
+    Falls back to standard generation if the custom prompt call fails.
+    """
+    if not settings.GEMINI_API_KEY or not custom_prompt:
+        return generate_catalog(request)
+
+    def _call_gemini_custom() -> dict | None:
+        try:
+            client = genai.Client(api_key=settings.GEMINI_API_KEY)
+            # Append JSON schema instruction to the orchestrator's prompt
+            full_prompt = (
+                custom_prompt
+                + f"\n\nProduct ID for this entry: {request.product_id}\n\n"
+                + "Return ONLY valid JSON with keys: "
+                + "product_id, product_title, keywords (list), description, language, requires_artisan_review."
+            )
+            for model_name in ["gemini-2.5-flash", "gemini-1.5-flash"]:
+                try:
+                    result = client.models.generate_content(
+                        model=model_name,
+                        contents=full_prompt,
+                        config={"temperature": 0.35, "response_mime_type": "application/json"},
+                    )
+                    raw = (result.text or "").strip()
+                    raw = re.sub(r"\A```(?:json)?\s*|\s*```\Z", "", raw, flags=re.IGNORECASE)
+                    if raw:
+                        return json.loads(raw)
+                except Exception:
+                    continue
+        except Exception:
+            return None
+        return None
+
+    try:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+            future = executor.submit(_call_gemini_custom)
+            response_data = future.result(timeout=6.0)
+
+        if response_data:
+            response = CatalogResponse.model_validate(response_data)
+            return response.model_copy(update={
+                "product_id": request.product_id,
+                "language": request.language,
+                "requires_artisan_review": True,
+            })
+    except Exception as err:
+        print(f"[CATALOG AGENT] Custom prompt generation failed ({err}). Using standard pipeline.")
+
+    return generate_catalog(request)
+
+
 def generate_catalog(request: CatalogRequest) -> CatalogResponse:
     """Generate and validate a product catalog using Gemini AI with fallback."""
 

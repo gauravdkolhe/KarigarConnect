@@ -12,6 +12,7 @@ from backend.app.agents.catalog_agent import generate_catalog
 from backend.app.agents.image_routes import router as image_router
 from backend.app.agents.inquiry_routes import router as inquiry_router
 from backend.app.agents.market_linkage_routes import router as market_linkage_router
+from backend.app.agents.orchestrator_routes import router as orchestrator_router
 from backend.app.agents.pricing_routes import router as pricing_router
 from backend.app.agents.workflow_routes import router as workflow_router
 from backend.app.database.connection import check_database_connection
@@ -84,6 +85,7 @@ app = FastAPI(
     openapi_tags=[
         {"name": "Health", "description": "Service health and readiness checks."},
         {"name": "Authentication", "description": "User registration, login, JWT tokens, and profile management."},
+        {"name": "Prompt Orchestrator Agent", "description": "Master orchestrator that enriches raw artisan input into detailed prompts for all downstream agents."},
         {"name": "Four-Agent Workflow", "description": "Unified artisan product workflow: create → images → catalog → pricing → inventory → publish."},
         {"name": "Image Processing", "description": "Upload and AI-enhance product photographs."},
         {"name": "Dynamic Pricing", "description": "Calculate recommended selling prices with cost breakdowns and scenario analysis."},
@@ -111,6 +113,7 @@ register_rate_limiter(app)
 
 # Register routers
 app.include_router(auth_router)
+app.include_router(orchestrator_router)
 app.include_router(image_router)
 app.include_router(pricing_router)
 app.include_router(market_linkage_router)

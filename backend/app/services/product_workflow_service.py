@@ -17,7 +17,8 @@ from backend.app.schemas.workflow import (
     WorkflowStateResponse,
     WorkflowStatus,
 )
-from backend.app.agents.catalog_agent import generate_catalog
+from backend.app.agents.catalog_agent import generate_catalog, generate_catalog_with_prompt
+from backend.app.agents.orchestrator_agent import orchestrate
 from backend.app.services.catalog_service import save_catalog, save_manual_catalog
 from backend.app.services.inventory_service import get_artisan_inventory, save_artisan_inventory
 from backend.app.services.matching_service import find_matches_for_product
@@ -298,41 +299,62 @@ def quick_assist_workflow(
     req: WorkflowQuickAssistRequest,
 ) -> WorkflowStateResponse:
     """
-    Step 2: Voice-to-Catalog & AI Fair Pricing Assistant.
-    Takes spoken/typed text in local language, generates structured catalog and pricing recommendation.
+    Step 2: Voice-to-Catalog & AI Fair Pricing Assistant — powered by Orchestrator Agent.
+
+    Flow:
+      1. Orchestrator Agent analyses spoken text → produces rich brief for all agents
+      2. Catalog Agent uses Orchestrator's detailed prompt → better title/description/keywords
+      3. Pricing Agent uses Orchestrator's price intelligence → fairer suggested price
     """
     wf = _check_product_ownership(product_id, artisan_id)
 
-    # 1. Parse or infer craft details from spoken description
     spoken = req.spoken_text.strip()
     product_name = wf.get("product_name") or "Artisanal Craft"
-    
-    # Generate catalog with Gemini AI / craft fallback engine
+
+    # ── 1. ORCHESTRATOR: enrich raw artisan input into detailed agent briefs ──
+    print(f"[WORKFLOW] Running Orchestrator Agent for product '{product_name}'…")
+    brief = orchestrate(
+        spoken_text=spoken,
+        product_name=product_name,
+        material=wf.get("initial_material", ""),
+        language=req.language or "en",
+        estimated_cost=req.estimated_cost,
+        desired_price=req.desired_price,
+    )
+    print(f"[ORCHESTRATOR] Craft={brief.detected_craft_type}, Region={brief.detected_region}, "
+          f"Segment={brief.primary_b2b_segment}, Price=₹{brief.suggested_price}")
+
+    # ── 2. CATALOG AGENT: use Orchestrator's detailed prompt ─────────────────
     cat_req = CatalogRequest(
         product_id=product_id,
         product_name=product_name,
-        language=req.language or "en",
+        language="en",
         details=ProductDetails(
-            material=spoken[:50] if len(spoken) < 50 else "Natural Heritage Material",
-            craft_type="Traditional Indian Handicraft",
+            material=brief.detected_material,
+            craft_type=brief.detected_craft_type,
             color="Natural Artisan Finish",
-            purpose=spoken,
+            purpose=brief.primary_b2b_segment,
         ),
     )
-    generated = generate_catalog(cat_req)
-    # Augment description with artisan's voice context if needed
-    if spoken and len(spoken) > 5 and spoken.lower() not in generated.description.lower():
-        generated.description = f"{generated.description} Artisan's note: \"{spoken}\""
+
+    # Pass the Orchestrator's catalog_prompt if available (richer output)
+    if brief.catalog_prompt:
+        generated = generate_catalog_with_prompt(cat_req, brief.catalog_prompt)
+    else:
+        generated = generate_catalog(cat_req)
+
+    # Ensure english description is woven into catalog
+    if brief.english_description and brief.english_description.lower() not in generated.description.lower():
+        generated.description = f"{generated.description}\n\nArtisan's Story: {brief.english_description}"
 
     save_catalog(cat_req, generated)
 
-    # 2. Automatically compute dynamic fair pricing
-    # Base estimated cost
-    base_material = req.estimated_cost or 250.0
-    base_labor = 200.0 if not req.desired_price else max(100.0, req.desired_price * 0.3)
-    base_pack = 40.0
-    base_over = 30.0
-    base_ship = 40.0
+    # ── 3. PRICING AGENT: use Orchestrator's price intelligence ──────────────
+    base_material = req.estimated_cost or (brief.price_floor * 0.4)
+    base_labor    = max(80.0, base_material * 0.6) if not req.desired_price else max(80.0, req.desired_price * 0.25)
+    base_pack     = round(base_material * 0.08, 2)
+    base_over     = round(base_material * 0.12, 2)
+    base_ship     = 40.0
 
     pricing_req = PricingRequest(
         product_id=product_id,
@@ -342,14 +364,27 @@ def quick_assist_workflow(
         packaging_cost=base_pack,
         overhead_cost=base_over,
         shipping_cost=base_ship,
-        target_profit_margin_percent=25.0,
+        target_profit_margin_percent=28.0,
         marketplace_commission_percent=10.0,
         rounding_rule="round_nearest_rupee",
     )
     pricing_res = calculate_price(pricing_req)
+
+    # Override with Orchestrator's smarter price if artisan gave a desired price
+    # or if orchestrator's suggested price is significantly different
+    if req.desired_price and req.desired_price > 0:
+        pricing_res.suggested_selling_price = req.desired_price
+    elif brief.suggested_price and brief.suggested_price > pricing_res.suggested_selling_price:
+        pricing_res.suggested_selling_price = brief.suggested_price
+
     save_pricing_record(pricing_res)
 
-    # Update workflow state
+    # ── 4. Store orchestrator brief in workflow doc for UI display ────────────
+    database["product_workflows"].update_one(
+        {"product_id": product_id},
+        {"$set": {"orchestrator_brief": brief.to_dict()}}
+    )
+
     _update_workflow_step(product_id, "catalog_pending", "quick_assist_generated")
     return get_workflow_state(product_id, artisan_id=artisan_id)
 
