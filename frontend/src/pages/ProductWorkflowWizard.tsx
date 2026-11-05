@@ -2,9 +2,10 @@ import React, { useEffect, useState, useRef } from 'react';
 import { api, API_BASE } from '../services/api';
 import type { ProductMatch, WorkflowState } from '../types';
 import { VoiceInputButton } from '../components/VoiceInputButton';
+import { VariationPicker, type Variation } from '../components/VariationPicker';
 import {
   AlertTriangle, ArrowLeft, ArrowRight, CheckCircle2,
-  ChevronDown, ChevronUp, Loader2, Package, Sparkles,
+  ChevronDown, ChevronUp, Layers, Loader2, Package, Sparkles,
   Star, Upload, Users, Wand2,
 } from 'lucide-react';
 
@@ -64,6 +65,8 @@ export const ProductWorkflowWizard: React.FC<Props> = ({ productId: initId, onNa
   // AI result
   const [aiReady, setAiReady]       = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [showVariations, setShowVariations] = useState(false);
+  const [variations, setVariations] = useState<Variation[]>([]);
   const [editTitle, setEditTitle]   = useState('');
   const [editDesc, setEditDesc]     = useState('');
   const [editKw, setEditKw]         = useState('');
@@ -92,6 +95,17 @@ export const ProductWorkflowWizard: React.FC<Props> = ({ productId: initId, onNa
       setEditQty(String(w.inventory.available_quantity));
       setEditMoq(String(w.inventory.minimum_order_quantity));
       setEditLoc(w.inventory.location);
+    }
+    if (w.variations && w.variations.length > 0) {
+      setVariations(w.variations.map(v => ({
+        variation_id: v.variation_id,
+        variation_type: v.variation_type,
+        label: v.label,
+        price_adjustment: v.price_adjustment,
+        available_quantity: v.available_quantity,
+        emoji: v.emoji || '🔖',
+      })));
+      setShowVariations(true);
     }
   };
 
@@ -190,6 +204,16 @@ export const ProductWorkflowWizard: React.FC<Props> = ({ productId: initId, onNa
         minimum_order_quantity: Number(editMoq) || 5,
         location:      editLoc || 'India',
       });
+
+      // Save variations if artisan added any
+      if (variations.length > 0) {
+        try {
+          await api.saveVariations(workflow.product_id, variations);
+        } catch (vErr) {
+          console.warn('Could not save variations:', vErr);
+        }
+      }
+
       setWorkflow(w);
       await loadMatches(w.product_id);
       win('🎉 Your product is live on the B2B marketplace!');
@@ -202,6 +226,7 @@ export const ProductWorkflowWizard: React.FC<Props> = ({ productId: initId, onNa
   const reset = () => {
     setStep(1); setWorkflow(null); setName(''); setMaterial(''); setFile(null);
     setPreview(null); setSpoken(''); setAiReady(false); setShowAdvanced(false);
+    setShowVariations(false); setVariations([]);
     setEditTitle(''); setEditDesc(''); setEditKw(''); setEditMat(''); setEditPrice('');
     setError(null); setOk(null); setMatches([]);
   };
@@ -492,6 +517,69 @@ export const ProductWorkflowWizard: React.FC<Props> = ({ productId: initId, onNa
                 )}
               </div>
 
+              {/* ── Product Variations (Optional) ── */}
+              <div style={{
+                background: 'var(--color-bg)',
+                border: '1px solid var(--color-border)',
+                borderRadius: 'var(--radius-md)',
+                padding: '1rem',
+                marginBottom: '1rem',
+              }}>
+                <button
+                  type="button"
+                  onClick={() => setShowVariations(v => !v)}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    cursor: 'pointer',
+                    width: '100%',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: 0,
+                    textAlign: 'left',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <Layers size={18} color="var(--color-primary)" />
+                    <div>
+                      <span style={{ fontWeight: 700, fontSize: '0.95rem' }}>Add Sizes / Colours / Types</span>
+                      <span style={{ fontSize: '0.78rem', color: 'var(--color-text-muted)', marginLeft: '0.5rem' }}>
+                        (Optional — optional simple options)
+                      </span>
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                    {variations.length > 0 && (
+                      <span style={{
+                        background: 'var(--color-primary-subtle, #F5F3FF)',
+                        color: 'var(--color-primary)',
+                        padding: '0.15rem 0.55rem',
+                        borderRadius: 999,
+                        fontSize: '0.75rem',
+                        fontWeight: 700,
+                      }}>
+                        {variations.length} added
+                      </span>
+                    )}
+                    {showVariations ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                  </div>
+                </button>
+
+                {showVariations && (
+                  <div style={{ marginTop: '1rem', paddingTop: '0.75rem', borderTop: '1px solid var(--color-border)' }}>
+                    <p style={{ margin: '0 0 0.75rem', fontSize: '0.82rem', color: 'var(--color-text-muted)' }}>
+                      Tap chips below to add standard sizes, colors, or materials. No typing needed!
+                    </p>
+                    <VariationPicker
+                      basePrice={Number(editPrice) || 0}
+                      variations={variations}
+                      onChange={setVariations}
+                    />
+                  </div>
+                )}
+              </div>
+
               {/* Advanced toggle */}
               <button type="button"
                 onClick={() => setShowAdvanced(v => !v)}
@@ -603,12 +691,43 @@ export const ProductWorkflowWizard: React.FC<Props> = ({ productId: initId, onNa
                 </p>
               )}
               {(workflow.catalog?.keywords || []).length > 0 && (
-                <div style={{ display: 'flex', gap: '0.3rem', flexWrap: 'wrap' }}>
+                <div style={{ display: 'flex', gap: '0.3rem', flexWrap: 'wrap', marginBottom: '0.5rem' }}>
                   {(workflow.catalog!.keywords || []).slice(0, 6).map(k => (
                     <span key={k} style={{ background: 'var(--color-bg-subtle)', border: '1px solid var(--color-border)', borderRadius: 999, padding: '0.15rem 0.55rem', fontSize: '0.7rem', color: 'var(--color-text-muted)' }}>
                       {k}
                     </span>
                   ))}
+                </div>
+              )}
+
+              {/* Variations on Step 3 */}
+              {(workflow.variations || variations).length > 0 && (
+                <div style={{ marginTop: '0.5rem', paddingTop: '0.5rem', borderTop: '1px solid var(--color-border)' }}>
+                  <p style={{ margin: '0 0 0.35rem', fontSize: '0.78rem', fontWeight: 700, color: 'var(--color-text-muted)' }}>
+                    Available Options / Variations:
+                  </p>
+                  <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
+                    {(workflow.variations || variations).map(v => (
+                      <span key={v.variation_id} style={{
+                        display: 'inline-flex', alignItems: 'center', gap: '0.25rem',
+                        background: 'var(--color-primary-subtle, #F5F3FF)',
+                        border: '1px solid var(--color-border)',
+                        borderRadius: 'var(--radius-sm)',
+                        padding: '0.2rem 0.55rem',
+                        fontSize: '0.75rem',
+                        fontWeight: 600,
+                        color: 'var(--color-primary)',
+                      }}>
+                        <span>{v.emoji || '🔖'}</span>
+                        <span>{v.label}</span>
+                        {v.price_adjustment !== 0 && (
+                          <span style={{ color: v.price_adjustment > 0 ? '#059669' : '#DC2626' }}>
+                            ({v.price_adjustment > 0 ? '+' : ''}₹{v.price_adjustment})
+                          </span>
+                        )}
+                      </span>
+                    ))}
+                  </div>
                 </div>
               )}
             </div>

@@ -14,6 +14,8 @@ from backend.app.schemas.workflow import (
     WorkflowProductCreate,
     WorkflowQuickAssistRequest,
     WorkflowSingleApproveRequest,
+    ProductVariation,
+    ProductVariationUpsert,
     WorkflowStateResponse,
     WorkflowStatus,
 )
@@ -127,6 +129,7 @@ def get_workflow_state(product_id: str, artisan_id: str | None = None) -> Workfl
         catalog=catalog_doc,
         pricing=pricing_doc,
         inventory=inventory_doc,
+        variations=wf_doc.get("variations", []),
         match_count=match_count,
         created_at=wf_doc.get("created_at", datetime.now(timezone.utc)).isoformat() if isinstance(wf_doc.get("created_at"), datetime) else str(wf_doc.get("created_at")),
         updated_at=wf_doc.get("updated_at", datetime.now(timezone.utc)).isoformat() if isinstance(wf_doc.get("updated_at"), datetime) else str(wf_doc.get("updated_at")),
@@ -484,3 +487,57 @@ def _update_workflow_step(product_id: str, new_status: WorkflowStatus, step_name
             "$addToSet": {"steps_completed": step_name},
         },
     )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Product Variations
+# ─────────────────────────────────────────────────────────────────────────────
+
+def save_product_variations(
+    product_id: str,
+    artisan_id: str,
+    req: ProductVariationUpsert,
+) -> list[dict]:
+    """Save (replace) all variations for a product. Returns the saved list."""
+    _check_product_ownership(product_id, artisan_id)
+
+    now = datetime.now(timezone.utc)
+    variations = []
+    for v in req.variations:
+        vid = v.variation_id.strip() if v.variation_id else f"VAR-{uuid4().hex[:6].upper()}"
+        variations.append({
+            "variation_id":    vid,
+            "variation_type":  v.variation_type,
+            "label":           v.label,
+            "price_adjustment": v.price_adjustment,
+            "available_quantity": v.available_quantity,
+            "emoji":           v.emoji,
+        })
+
+    database["product_workflows"].update_one(
+        {"product_id": product_id},
+        {"$set": {"variations": variations, "updated_at": now}},
+    )
+    return variations
+
+
+def get_product_variations(product_id: str) -> list[dict]:
+    """Return all saved variations for a product."""
+    doc = database["product_workflows"].find_one({"product_id": product_id}, {"variations": 1})
+    if not doc:
+        raise HTTPException(status_code=404, detail=f"Product '{product_id}' not found.")
+    return doc.get("variations") or []
+
+
+def delete_product_variation(product_id: str, artisan_id: str, variation_id: str) -> list[dict]:
+    """Remove a single variation by ID and return the remaining list."""
+    _check_product_ownership(product_id, artisan_id)
+    now = datetime.now(timezone.utc)
+    database["product_workflows"].update_one(
+        {"product_id": product_id},
+        {
+            "$pull":  {"variations": {"variation_id": variation_id}},
+            "$set":   {"updated_at": now},
+        },
+    )
+    return get_product_variations(product_id)

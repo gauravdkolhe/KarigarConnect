@@ -334,4 +334,29 @@ export const api = {
       body: JSON.stringify(data),
     });
   },
+
+  // Product Variations
+  async saveVariations(productId: string, variations: Array<{
+    variation_id?: string;
+    variation_type: string;
+    label: string;
+    price_adjustment: number;
+    available_quantity: number;
+    emoji?: string;
+  }>): Promise<{ product_id: string; variation_count: number; variations: any[] }> {
+    return request(`/api/workflow/products/${productId}/variations`, {
+      method: 'POST',
+      body: JSON.stringify({ variations }),
+    });
+  },
+
+  async getVariations(productId: string): Promise<{ product_id: string; variations: any[] }> {
+    return request(`/api/workflow/products/${productId}/variations`);
+  },
+
+  async deleteVariation(productId: string, variationId: string): Promise<{ variations: any[] }> {
+    return request(`/api/workflow/products/${productId}/variations/${variationId}`, {
+      method: 'DELETE',
+    });
+  },
 };

@@ -9,6 +9,7 @@ from backend.app.schemas.workflow import (
     WorkflowProductCreate,
     WorkflowQuickAssistRequest,
     WorkflowSingleApproveRequest,
+    ProductVariationUpsert,
     WorkflowStateResponse,
 )
 from backend.app.services.auth_service import get_current_user, require_role
@@ -24,6 +25,9 @@ from backend.app.services.product_workflow_service import (
     publish_workflow_product,
     quick_assist_workflow,
     single_approve_workflow,
+    save_product_variations,
+    get_product_variations,
+    delete_product_variation,
 )
 
 router = APIRouter(
@@ -195,3 +199,51 @@ def get_product_buyer_matches(
         min_score=min_score,
         max_results=max_results,
     )
+
+
+
+# ── Product Variations ────────────────────────────────────────────────────────
+
+@router.post(
+    "/products/{product_id}/variations",
+    summary="Save product variations (size, color, type, etc.)",
+    description=(
+        "Artisan can optionally add variations to a product — e.g. Small/Medium/Large, "
+        "Red/Blue/Green, Cotton/Silk. Each variation can have its own price adjustment "
+        "and stock quantity. Calling this replaces all existing variations."
+    ),
+    status_code=status.HTTP_200_OK,
+)
+def upsert_variations(
+    product_id: str,
+    req: ProductVariationUpsert,
+    current_user: UserProfileResponse = Depends(require_role(["artisan", "admin"])),
+):
+    saved = save_product_variations(product_id, current_user.user_id, req)
+    return {"product_id": product_id, "variation_count": len(saved), "variations": saved}
+
+
+@router.get(
+    "/products/{product_id}/variations",
+    summary="List all variations for a product",
+    status_code=status.HTTP_200_OK,
+)
+def list_variations(
+    product_id: str,
+    current_user: UserProfileResponse = Depends(get_current_user),
+):
+    return {"product_id": product_id, "variations": get_product_variations(product_id)}
+
+
+@router.delete(
+    "/products/{product_id}/variations/{variation_id}",
+    summary="Remove a single variation",
+    status_code=status.HTTP_200_OK,
+)
+def remove_variation(
+    product_id: str,
+    variation_id: str,
+    current_user: UserProfileResponse = Depends(require_role(["artisan", "admin"])),
+):
+    remaining = delete_product_variation(product_id, current_user.user_id, variation_id)
+    return {"product_id": product_id, "variation_count": len(remaining), "variations": remaining}

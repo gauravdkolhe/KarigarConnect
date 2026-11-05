@@ -173,6 +173,15 @@ export interface ProductMatch {
   };
 }
 
+export interface ProductVariationItem {
+  variation_id: string;
+  variation_type: string;
+  label: string;
+  price_adjustment: number;
+  available_quantity: number;
+  emoji?: string;
+}
+
 export interface WorkflowState {
   product_id: string;
   artisan_id: string;
@@ -183,6 +192,7 @@ export interface WorkflowState {
   catalog?: ProductCatalog | null;
   pricing?: PricingRecord | null;
   inventory?: ArtisanInventory | null;
+  variations?: ProductVariationItem[];
   match_count: number;
   created_at: string;
   updated_at: string;

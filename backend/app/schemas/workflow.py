@@ -75,6 +75,7 @@ class WorkflowStateResponse(BaseModel):
     catalog: dict[str, Any] | None = None
     pricing: dict[str, Any] | None = None
     inventory: dict[str, Any] | None = None
+    variations: list[dict[str, Any]] = Field(default_factory=list)
     match_count: int = 0
     created_at: str
     updated_at: str
@@ -103,3 +104,22 @@ class WorkflowSingleApproveRequest(BaseModel):
     available_quantity: int = Field(default=20, ge=1)
     minimum_order_quantity: int = Field(default=2, ge=1)
     location: str = Field(default="India", max_length=200)
+
+
+class ProductVariation(BaseModel):
+    """A single product variation (size, color, material type, etc.)."""
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    variation_id: str = Field(default="", description="Auto-generated if empty")
+    variation_type: str = Field(default="size", description="Category: size | color | material | type | other")
+    label: str = Field(..., min_length=1, max_length=60, description="Display label e.g. 'Small', 'Red', 'Cotton'")
+    price_adjustment: float = Field(default=0.0, description="Price +/- relative to base price. 0 = same price.")
+    available_quantity: int = Field(default=10, ge=0)
+    emoji: str = Field(default="", max_length=4, description="Optional emoji for the chip UI")
+
+
+class ProductVariationUpsert(BaseModel):
+    """Request to add/replace variations for a product."""
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    variations: list[ProductVariation] = Field(..., min_length=1, max_length=20)
