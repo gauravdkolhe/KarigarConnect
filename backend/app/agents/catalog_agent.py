@@ -88,7 +88,7 @@ def generate_catalog_with_prompt(request: CatalogRequest, custom_prompt: str) ->
                 + "Return ONLY valid JSON with keys: "
                 + "product_id, product_title, keywords (list), description, language, requires_artisan_review."
             )
-            for model_name in ["gemini-2.5-flash", "gemini-1.5-flash"]:
+            for model_name in ["gemini-3.5-flash", "gemini-3.1-flash-lite", "gemini-flash-latest"]:
                 try:
                     result = client.models.generate_content(
                         model=model_name,
@@ -150,7 +150,7 @@ Requirements:
     def _call_gemini() -> dict | None:
         try:
             client = genai.Client(api_key=settings.GEMINI_API_KEY)
-            for model_name in ["gemini-2.5-flash", "gemini-1.5-flash"]:
+            for model_name in ["gemini-3.5-flash", "gemini-3.1-flash-lite", "gemini-flash-latest"]:
                 try:
                     result = client.models.generate_content(
                         model=model_name,

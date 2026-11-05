@@ -450,6 +450,7 @@ def single_approve_workflow(
     # 3. Configure inventory for B2B buyer ordering
     inv_data = ArtisanInventory(
         product_id=product_id,
+        artisan_id=artisan_id,
         available_quantity=req.available_quantity,
         production_capacity_per_month=max(50, req.available_quantity * 3),
         minimum_order_quantity=req.minimum_order_quantity,

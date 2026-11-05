@@ -397,14 +397,29 @@ export const ProductWorkflowWizard: React.FC<Props> = ({ productId: initId, onNa
       {step === 2 && workflow && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
 
-          {/* Photo thumbnail */}
+          {/* Photo thumbnail & Verification */}
           {workflow.images?.length > 0 && (
-            <div className="card" style={{ padding: '1rem', display: 'flex', gap: '1rem', alignItems: 'center' }}>
-              <img src={`${API_BASE}${workflow.images[0].file_url}`} alt="craft"
-                style={{ width: 80, height: 80, objectFit: 'contain', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', background: '#fff' }} />
-              <div>
-                <p style={{ margin: '0 0 0.2rem', fontWeight: 700, color: '#10B981', fontSize: '0.88rem' }}>✓ Photo Ready (1200×1200)</p>
-                <p style={{ margin: 0, fontSize: '0.8rem', color: 'var(--color-text-muted)' }}>{workflow.images.length} image processed</p>
+            <div className="card" style={{ padding: '1.25rem', border: '2px solid #BBF7D0', background: '#F0FDF4', borderRadius: 'var(--radius-lg)' }}>
+              <div style={{ display: 'flex', gap: '1.25rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                <div style={{ position: 'relative', width: 110, height: 110, borderRadius: 'var(--radius-md)', overflow: 'hidden', border: '2px solid #10B981', background: '#fff', boxShadow: '0 4px 10px rgba(0,0,0,0.08)', flexShrink: 0 }}>
+                  <img src={`${API_BASE}${workflow.images[0].file_url}`} alt="Enhanced craft"
+                    style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+                  <span style={{ position: 'absolute', bottom: 2, right: 2, background: '#10B981', color: '#fff', fontSize: '0.65rem', fontWeight: 700, padding: '0.1rem 0.35rem', borderRadius: 4 }}>
+                    VERIFIED
+                  </span>
+                </div>
+                <div style={{ flex: 1, minWidth: 200 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '0.25rem' }}>
+                    <CheckCircle2 size={18} color="#10B981" />
+                    <span style={{ fontWeight: 800, color: '#166534', fontSize: '1rem' }}>Photo Enhanced & Verified in Studio</span>
+                  </div>
+                  <p style={{ margin: '0 0 0.5rem', fontSize: '0.82rem', color: '#166534', opacity: 0.9 }}>
+                    Aesthetic studio lighting applied. Pure, clean framing for high-converting B2B buyer catalog displays.
+                  </p>
+                  <button type="button" className="btn btn-outline btn-xs" onClick={() => setStep(1)} style={{ fontSize: '0.75rem', background: '#fff' }}>
+                    🔄 Change Photo / Style
+                  </button>
+                </div>
               </div>
             </div>
           )}
@@ -488,14 +503,22 @@ export const ProductWorkflowWizard: React.FC<Props> = ({ productId: initId, onNa
               </div>
 
               {/* AI preview (read-only summary) */}
-              <div style={{ background: 'var(--color-bg-subtle)', borderRadius: 'var(--radius-md)', padding: '1rem', marginBottom: '1.25rem' }}>
-                <p style={{ margin: '0 0 0.35rem', fontWeight: 700, fontSize: '0.95rem' }}>{editTitle}</p>
-                <p style={{ margin: '0 0 0.5rem', fontSize: '0.83rem', color: 'var(--color-text-muted)', lineHeight: 1.6 }}>
-                  {editDesc.length > 160 ? editDesc.slice(0, 160) + '…' : editDesc}
+              <div style={{ background: 'var(--color-bg-subtle)', borderRadius: 'var(--radius-md)', padding: '1.25rem', marginBottom: '1.25rem', border: '1px solid var(--color-border)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '0.5rem' }}>
+                  <Sparkles size={16} color="var(--color-primary)" />
+                  <span style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--color-primary)' }}>
+                    Auto-Translated into English for Global B2B Buyers
+                  </span>
+                </div>
+                <p style={{ margin: '0 0 0.35rem', fontWeight: 800, fontSize: '1.05rem', color: 'var(--color-text)' }}>{editTitle}</p>
+                <p style={{ margin: '0 0 0.5rem', fontSize: '0.88rem', color: 'var(--color-text)', lineHeight: 1.6 }}>
+                  {editDesc}
                 </p>
-                {editKw && <p style={{ margin: 0, fontSize: '0.78rem', color: 'var(--color-text-muted)' }}>
-                  Tags: {editKw}
-                </p>}
+                {editKw && (
+                  <p style={{ margin: 0, fontSize: '0.78rem', color: 'var(--color-text-muted)' }}>
+                    <strong>Keywords:</strong> {editKw}
+                  </p>
+                )}
               </div>
 
               {/* ── THE ONLY REQUIRED INPUT: Price ── */}

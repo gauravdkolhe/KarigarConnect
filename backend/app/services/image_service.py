@@ -78,39 +78,52 @@ STYLE_CONFIGS = {
 
 def _extract_subject_mask(image_rgb: Image.Image) -> Image.Image:
     """
-    Segment the craft subject from the background.
-    Uses multi-border color sampling, color-delta thresholding, and morphological smoothing.
+    Intelligent craft subject segmentation.
+    Uses multi-color background sampling, center-biased saliency,
+    and adaptive thresholding to cleanly isolate foreground craft products
+    without ragged cutout edges or artifacts.
     """
     img_np = np.array(image_rgb).astype(np.float32)
     h, w, _ = img_np.shape
 
-    # Sample perimeter border pixels (top, bottom, left, right strips) to model background
-    border_px = 12
-    top_strip = img_np[:border_px, :, :].reshape(-1, 3)
-    bottom_strip = img_np[h - border_px :, :, :].reshape(-1, 3)
-    left_strip = img_np[:, :border_px, :].reshape(-1, 3)
-    right_strip = img_np[:, w - border_px :, :].reshape(-1, 3)
+    # 1. Sample all four outer margins (10% perimeter)
+    bx = max(8, int(w * 0.08))
+    by = max(8, int(h * 0.08))
+    top = img_np[:by, :, :].reshape(-1, 3)
+    bottom = img_np[h - by :, :, :].reshape(-1, 3)
+    left = img_np[:, :bx, :].reshape(-1, 3)
+    right = img_np[:, w - bx :, :].reshape(-1, 3)
+    border_pixels = np.vstack([top, bottom, left, right])
 
-    borders = np.vstack([top_strip, bottom_strip, left_strip, right_strip])
-    bg_median = np.median(borders, axis=0)
+    # Multi-point background reference (median, mean, and corner modes)
+    bg_median = np.median(border_pixels, axis=0)
+    corners = np.array([img_np[0, 0], img_np[0, -1], img_np[-1, 0], img_np[-1, -1]])
+    bg_corner = np.mean(corners, axis=0)
 
-    # Compute Euclidean color distance from estimated background
-    diff = np.sqrt(np.sum((img_np - bg_median) ** 2, axis=2))
+    # Color distance from borders
+    diff_median = np.sqrt(np.sum((img_np - bg_median) ** 2, axis=2))
+    diff_corner = np.sqrt(np.sum((img_np - bg_corner) ** 2, axis=2))
+    diff = np.minimum(diff_median, diff_corner)
 
-    # Determine dynamic threshold based on variance in the border
-    border_diff = np.sqrt(np.sum((borders - bg_median) ** 2, axis=1))
-    threshold = float(np.percentile(border_diff, 85)) + 18.0
-    threshold = max(24.0, min(threshold, 65.0))
+    # 2. Add center-biased saliency (artisan subjects are centered in frame)
+    y_idx, x_idx = np.ogrid[:h, :w]
+    center_y, center_x = h / 2.0, w / 2.0
+    dist_from_center = np.sqrt(((x_idx - center_x) / (w / 2.0)) ** 2 + ((y_idx - center_y) / (h / 2.0)) ** 2)
+    center_weight = np.clip(1.25 - 0.5 * dist_from_center, 0.6, 1.25)
+    weighted_diff = diff * center_weight
 
-    # Initial binary mask
-    raw_mask = (diff > threshold).astype(np.uint8) * 255
-    mask_pil = Image.fromarray(raw_mask, mode="L")
+    # 3. Dynamic contrast-aware threshold
+    border_diff = np.sqrt(np.sum((border_pixels - bg_median) ** 2, axis=1))
+    noise_floor = float(np.percentile(border_diff, 80))
+    threshold = max(20.0, min(noise_floor + 14.0, 55.0))
 
-    # Clean up holes and smooth transitions
-    mask_pil = mask_pil.filter(ImageFilter.MaxFilter(size=5))
-    mask_pil = mask_pil.filter(ImageFilter.MinFilter(size=3))
-    mask_pil = mask_pil.filter(ImageFilter.GaussianBlur(radius=1.8))
+    # Soft alpha matte rather than harsh 1-bit binary mask
+    soft_mask = np.clip((weighted_diff - threshold) / max(10.0, threshold * 0.5) * 255.0, 0.0, 255.0).astype(np.uint8)
+    mask_pil = Image.fromarray(soft_mask, mode="L")
 
+    # Clean small noise specks and feather the outer boundary
+    mask_pil = mask_pil.filter(ImageFilter.MedianFilter(size=3))
+    mask_pil = mask_pil.filter(ImageFilter.GaussianBlur(radius=1.5))
     return mask_pil
 
 
@@ -229,14 +242,15 @@ def enhance_product_image(
                 pos_y = (target_h - new_h) // 2
                 final_canvas.paste(resized, (pos_x, pos_y))
 
-                final_filename = f"{original_path.stem}_original_{uuid4().hex[:8]}.jpg"
+                final_filename = f"{source.stem}_original_{uuid4().hex[:8]}.jpg"
                 final_output_path = ENHANCED_DIR / final_filename
                 final_canvas.save(final_output_path, "JPEG", quality=95, optimize=True)
 
                 return {
-                    "image_id": original_path.stem,
-                    "original_filename": original_path.name,
+                    "image_id": source.stem,
+                    "original_filename": source.name,
                     "enhanced_filename": final_filename,
+                    "enhanced_path": str(final_output_path),
                     "original_dimensions": list(original_size),
                     "enhanced_dimensions": [target_w, target_h],
                     "style_applied": {
@@ -251,7 +265,7 @@ def enhance_product_image(
                         "saturation": 1.0,
                         "sharpness": 1.0,
                     },
-                    "relative_url": f"/api/images/{original_path.stem}/file",
+                    "relative_url": f"/api/images/{source.stem}/file",
                 }
 
             # 1. Histogram Auto-Levels for balanced dynamic range

@@ -22,6 +22,8 @@ from __future__ import annotations
 import concurrent.futures
 import json
 import re
+import urllib.parse
+import urllib.request
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -166,6 +168,41 @@ class OrchestratorBrief:
 # Rule-based enrichment engine (fallback)
 # ─────────────────────────────────────────────────────────────────────────────
 
+def _translate_to_english(text: str) -> str:
+    """Accurately translate any Indian or foreign spoken language to clear English."""
+    if not text or not text.strip():
+        return ""
+    cleaned = text.strip()
+    
+    # 1. Try Google Translate public API first for instantaneous, high-accuracy translation
+    try:
+        url = "https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=en&dt=t&q=" + urllib.parse.quote(cleaned)
+        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+        with urllib.request.urlopen(req, timeout=4.0) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+            translated_chunks = [item[0] for item in data[0] if item and item[0]]
+            if translated_chunks:
+                translated = "".join(translated_chunks).strip()
+                if translated and translated.lower() != cleaned.lower():
+                    print(f"[TRANSLATE] Translated to English: '{cleaned[:40]}...' -> '{translated[:40]}...'")
+                    return translated
+    except Exception as e:
+        print(f"[TRANSLATE] Online translation service unavailable: {e}")
+
+    # 2. Try Gemini flash model fallback
+    if settings.GEMINI_API_KEY:
+        try:
+            client = genai.Client(api_key=settings.GEMINI_API_KEY)
+            prompt = f"Translate the following Indian artisan craft description to fluent, natural English. Output ONLY the English translation without preamble or quotes:\n\n{cleaned}"
+            r = client.models.generate_content(model="gemini-3.5-flash", contents=prompt)
+            if r.text and r.text.strip():
+                return r.text.strip()
+        except Exception as e:
+            print(f"[TRANSLATE] Gemini translation fallback skipped: {e}")
+
+    return cleaned
+
+
 def _detect_craft(text: str) -> tuple[str, str]:
     """Returns (craft_type_key, craft_type_display)."""
     t = text.lower()
@@ -247,7 +284,7 @@ ARTISAN CONTEXT:
 - Craft Type: {craft_display}
 - Primary Material: {material or 'Natural Material'}
 - Artisan's Region: {region}
-- Artisan's Own Words: "{spoken_text}"
+- Artisan's Spoken Description (Translated to English): "{translated_spoken or spoken_text}"
 - Primary B2B Market Segment: {primary_seg}
 
 HERITAGE & CULTURAL CONTEXT:
@@ -353,10 +390,11 @@ SCORING BOOST: Give +15% score to buyers in: {', '.join(secondary_segs + [primar
 MATCHING KEYWORDS: {', '.join(matching_keywords)}
 """.strip()
 
+    translated_spoken = _translate_to_english(spoken_text) if spoken_text else ""
     english_desc = (
         f"{product_name} — a {craft_display} product crafted in {region} using {material or 'natural materials'}. "
-        f"Artisan's description: {spoken_text[:200]}"
-        if spoken_text else
+        f"Artisan's description: {translated_spoken}"
+        if translated_spoken else
         f"{product_name} — handcrafted {craft_display} from {region}."
     )
 
@@ -450,7 +488,7 @@ IMPORTANT:
     def _call() -> dict | None:
         try:
             client = genai.Client(api_key=settings.GEMINI_API_KEY)
-            for model in ["gemini-2.5-flash", "gemini-1.5-flash"]:
+            for model in ["gemini-3.5-flash", "gemini-3.1-flash-lite", "gemini-flash-latest"]:
                 try:
                     result = client.models.generate_content(
                         model=model,
